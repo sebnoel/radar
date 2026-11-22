@@ -148,7 +148,6 @@
         <button id="testNotif" type="button">Tester la notification</button>
       </div>
 
-      <!-- Bloc toujours visible pour synchroniser PC <-> Téléphone -->
       <div class="sync-box">
         <label>Code de profil (synchro PC ↔ Mobile &amp; ntfy)
           <div class="input-group">
@@ -166,13 +165,13 @@
       <details class="pc-help">
         <summary>Synchroniser PC ↔ iPhone et installer ntfy</summary>
         <div class="help-body">
-          <p><b>Synchroniser votre téléphone avec ce PC :</b> cliquez sur <i>Enregistrer</i> sur le PC, puis cliquez sur <b>Lien de synchro</b> et ouvrez ce lien sur votre iPhone. Tous vos réglages (ville, angle, alertes) seront copiés automatiquement.</p>
+          <p><b>Synchroniser vos appareils :</b> cliquez sur <i>Enregistrer</i>, puis utilisez <b>Lien de synchro</b> pour ouvrir ce profil sur votre téléphone. Toute modification enregistrée sur l’un se répercute automatiquement sur l’autre.</p>
           <p><b>Recevoir les alertes sur iPhone / Apple Watch :</b> installez l’app gratuite <b>ntfy</b>, appuyez sur <b>+</b> et entrez le code de profil ci-dessus.</p>
         </div>
       </details>
     </div>
 
-    <!-- Onglet 3 : Affichage Radar & Relais -->
+    <!-- Onglet 3 : Affichage Radar -->
     <div id="tab-radar" class="tab-panel" hidden>
       <div class="row">
         <label>Info 1 (radar)
@@ -221,10 +220,6 @@
           </select>
         </label>
       </div>
-
-      <label>Relais Worker (optionnel)
-        <input id="proxy" type="url" placeholder="https://radar-relay.sebnoel.workers.dev">
-      </label>
     </div>
 
     <button id="save" type="button" class="p">Enregistrer</button>
@@ -234,6 +229,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
+const RELAY_URL = (new URLSearchParams(location.search).get('proxy') || 'https://radar-relay.sebnoel.workers.dev').replace(/\/$/, '');
 
 /* ============ Matrice de LEDs : 128 x 72 points ============ */
 const W = 128, H = 72;
@@ -284,7 +280,7 @@ function loadLogo(icao){
     } catch(e){ logoCache[icao] = 'none'; }
   };
   img.onerror = () => { logoCache[icao] = 'none'; };
-  img.src = cfg.proxy ? `${cfg.proxy}/logo/${b[1]}` : `https://images.kiwi.com/airlines/64x64/${b[1]}.png`;
+  img.src = `${RELAY_URL}/logo/${b[1]}`;
 }
 
 const LX=4, LY=3, LS=32;
@@ -358,7 +354,6 @@ addEventListener('resize', paint);
 /* ============ Données de vol ============ */
 const DEFAULTS = {
   radius:30, refresh:10, lat:48.8566, lon:2.3522,
-  proxy:'https://radar-relay.sebnoel.workers.dev',
   follow:'', radarInfo1:'route', radarInfo2:'vrate', scaleDir:45, city:'Paris', showMap:true,
   notifEnabled:false, notifStart:'09:00', notifEnd:'00:00', notifAngle:15, ntfyTopic:'', updatedAt:0
 };
@@ -368,7 +363,6 @@ try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } 
 function normalizeCfg(){
   cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
   cfg.refresh = Math.min(300, Math.max(2, +cfg.refresh || 10));
-  if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;
   const INFO_KEYS = ['alt','route','speed','type','dist','track','vrate','none'];
   if (!INFO_KEYS.includes(cfg.radarInfo1)) cfg.radarInfo1 = DEFAULTS.radarInfo1;
   if (!INFO_KEYS.includes(cfg.radarInfo2)) cfg.radarInfo2 = DEFAULTS.radarInfo2;
@@ -383,6 +377,7 @@ function normalizeCfg(){
   cfg.follow = String(cfg.follow || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!cfg.ntfyTopic) cfg.ntfyTopic = 'radar-' + Math.random().toString(36).slice(2, 10);
   delete cfg.radarInfo;
+  delete cfg.proxy;
 }
 normalizeCfg();
 try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){}
@@ -407,9 +402,8 @@ async function fetchPlanes(){
   if (new URLSearchParams(location.search).has('demo')) return demoPlanes();
   const nm = Math.min(250, Math.max(1, cfg.radius/1.852)).toFixed(1);
   const errs = [];
-  const base = cfg.proxy || 'https://api.adsb.lol';
   const sources = [
-    ['adsb.lol',      `${base}/v2/point/${cfg.lat}/${cfg.lon}/${nm}`],
+    ['adsb.lol',      `${RELAY_URL}/v2/point/${cfg.lat}/${cfg.lon}/${nm}`],
     ['airplanes.live',`https://api.airplanes.live/v2/point/${cfg.lat}/${cfg.lon}/${nm}`]
   ];
   for (const [name,u] of sources){
@@ -440,11 +434,10 @@ async function fetchRoute(p){
   const cs = (p.flight||'').trim();
   if (!cs || routeCache[cs] || (routeTry[cs] && Date.now()-routeTry[cs] < 120000)) return;
   routeTry[cs] = Date.now();
-  const base = cfg.proxy || 'https://api.adsb.lol';
   const num = v => typeof v === 'number' && isFinite(v);
   let code = null, ap = null, cityO = '', cityD = '';
   try {
-    let j = await getJSON(`${base}/api/0/route/${encodeURIComponent(cs)}/${p.lat}/${p.lon}`);
+    let j = await getJSON(`${RELAY_URL}/api/0/route/${encodeURIComponent(cs)}/${p.lat}/${p.lon}`);
     if (Array.isArray(j)) j = j[0];
     if (j && j.plausible !== false && j.plausible !== 0){
       const list = j._airports || [];
@@ -453,9 +446,9 @@ async function fetchRoute(p){
       if (list.length >= 2){ cityO = list[0].location || ''; cityD = list[list.length-1].location || ''; }
     }
   } catch(e){}
-  if ((!code || code==='unknown' || !ap || ap.length < 2) && cfg.proxy){
+  if (!code || code==='unknown' || !ap || ap.length < 2){
     try {
-      const j = await getJSON(`${cfg.proxy}/adsbdb/v0/callsign/${encodeURIComponent(cs)}`);
+      const j = await getJSON(`${RELAY_URL}/adsbdb/v0/callsign/${encodeURIComponent(cs)}`);
       const f = j?.response?.flightroute;
       if (f?.origin?.iata_code && f?.destination?.iata_code){
         const code2 = f.origin.iata_code + '-' + f.destination.iata_code;
@@ -492,14 +485,14 @@ function saveCfg(){ try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); }
 function resetFollow(){ followMode='auto'; followPlane=null; followAirborne=false; followSeenAir=false; followLastSeen=0; followLow=false; }
 
 function landed(){
-  cfg.follow = ''; cfg.updatedAt = Date.now(); saveCfg(); pushFullConfig(); resetFollow(); render();
+  cfg.follow = ''; cfg.updatedAt = Date.now(); saveCfg(); pushFullConfig().catch(()=>{}); resetFollow(); render();
 }
 
 async function fetchFollow(){
   const cs = cfg.follow; if (!cs) return;
   let ac = null;
   try {
-    const j = await getJSON(`${cfg.proxy || 'https://api.adsb.lol'}/v2/callsign/${encodeURIComponent(cs)}`);
+    const j = await getJSON(`${RELAY_URL}/v2/callsign/${encodeURIComponent(cs)}`);
     ac = (j.ac || j.aircraft || []).find(a => typeof a.lat === 'number' && typeof a.lon === 'number') || null;
   } catch(e){ return; }
   if (ac){
@@ -608,9 +601,9 @@ function cleanTopic(v){
 async function pushFullConfig(){
   const topic = cleanTopic(cfg.ntfyTopic);
   if (topic.length < 4) return;
-  const base = (cfg.proxy || DEFAULTS.proxy).replace(/\/$/, '');
-  const r = await fetch(`${base}/cfg/${encodeURIComponent(topic)}`, {
+  const r = await fetch(`${RELAY_URL}/cfg/${encodeURIComponent(topic)}`, {
     method: 'POST',
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cfg)
   });
@@ -622,8 +615,9 @@ async function pushFullConfig(){
 async function pullRemoteConfig(topic, force = false){
   const t = cleanTopic(topic);
   if (t.length < 4) return false;
-  const base = (cfg.proxy || DEFAULTS.proxy).replace(/\/$/, '');
-  const r = await fetch(`${base}/cfg/${encodeURIComponent(t)}`);
+  const r = await fetch(`${RELAY_URL}/cfg/${encodeURIComponent(t)}?t=${Date.now()}`, {
+    cache: 'no-store'
+  });
   if (!r.ok) {
     if (force) {
       const j = await r.json().catch(() => ({}));
@@ -634,11 +628,11 @@ async function pullRemoteConfig(topic, force = false){
   const remote = await r.json();
   if (!remote || typeof remote !== 'object') return false;
   if (force || (remote.updatedAt && remote.updatedAt > (cfg.updatedAt || 0))) {
-    const keepProxy = cfg.proxy;
     Object.assign(cfg, remote, { ntfyTopic: t });
-    if (!cfg.proxy) cfg.proxy = keepProxy;
     normalizeCfg();
     saveCfg();
+    if ($('settings').classList.contains('open')) fillSettingsForm();
+    render();
     return true;
   }
   return false;
@@ -678,9 +672,9 @@ function buildSubPayload(overridePos){
 }
 
 async function syncNotif(payload){
-  const base = ($('proxy').value.trim() || cfg.proxy || DEFAULTS.proxy).replace(/\/$/,'');
-  const r = await fetch(`${base}/notify/sub`, {
+  const r = await fetch(`${RELAY_URL}/notify/sub`, {
     method: 'POST',
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
@@ -696,7 +690,6 @@ function fillSettingsForm(){
   selPos = null;
   $('cityResults').hidden = true;
   $('showMap').value = cfg.showMap ? '1' : '0';
-  $('proxy').value = cfg.proxy || '';
   $('follow').value = cfg.follow || '';
   $('radarInfo1').value = cfg.radarInfo1;
   $('radarInfo2').value = cfg.radarInfo2;
@@ -740,9 +733,9 @@ $('testNotif').onclick = async () => {
   try {
     status('Envoi de la notification test…');
     const payload = buildSubPayload();
-    const base = ($('proxy').value.trim() || cfg.proxy || DEFAULTS.proxy).replace(/\/$/,'');
-    const r = await fetch(`${base}/notify/test`, {
+    const r = await fetch(`${RELAY_URL}/notify/test`, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
@@ -759,6 +752,14 @@ function openSettings(){
   setTab('pos');
   fillSettingsForm();
   $('settings').classList.add('open');
+  pullRemoteConfig(cfg.ntfyTopic, false)
+    .then(changed => {
+      if (changed) {
+        resetFollow(); idx = 0; start();
+        status('Paramètres mis à jour depuis l’autre appareil');
+      }
+    })
+    .catch(() => {});
 }
 $('gear').onclick = openSettings;
 $('close').onclick = () => $('settings').classList.remove('open');
@@ -777,7 +778,6 @@ $('save').onclick = async () => {
     refresh: Math.min(300, Math.max(2, +$('refresh').value||DEFAULTS.refresh)),
     lat: pos.lat, lon: pos.lon, city: pos.label,
     showMap: $('showMap').value==='1',
-    proxy: $('proxy').value.trim().replace(/\/$/,''),
     follow: $('follow').value.trim().toUpperCase().replace(/\s+/g,''),
     radarInfo1: $('radarInfo1').value,
     radarInfo2: $('radarInfo2').value,
@@ -1063,7 +1063,6 @@ function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); id
 wake();
 
 async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
-keepAwake(); document.addEventListener('visibilitychange', () => document.visibilityState==='visible' && keepAwake());
 
 /* ============ Démarrage & Synchronisation automatique ============ */
 const qp = new URLSearchParams(location.search);
@@ -1079,18 +1078,28 @@ if (qp.get('view') === 'radar') {
 show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
 start();
 
+function syncNow(force = false){
+  pullRemoteConfig(cfg.ntfyTopic, force)
+    .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
+    .catch(() => {});
+}
+
 const syncParam = cleanTopic(qp.get('sync'));
 if (syncParam.length >= 4) {
   cfg.ntfyTopic = syncParam;
   saveCfg();
-  pullRemoteConfig(syncParam, true)
-    .then(ok => { if (ok) { resetFollow(); idx = 0; start(); } })
-    .catch(() => {});
+  syncNow(true);
 } else {
-  pullRemoteConfig(cfg.ntfyTopic, false)
-    .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
-    .catch(() => {});
+  syncNow(false);
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    keepAwake();
+    syncNow(false);
+  }
+});
+keepAwake();
 </script>
 </body>
 </html>
