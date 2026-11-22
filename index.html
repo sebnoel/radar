@@ -49,20 +49,23 @@
   .input-group input { flex:1; min-width:0; }
   #card button#geo { flex:none; padding:0 14px; font-size:18px; background:#1e2433; border:1px solid #2a3040; }
   #card button#geo:hover { background:#2a3247; }
+  #card button.btn-inline { flex:none; padding:0 12px; font-size:13px; background:#1e2433; border:1px solid #2a3040; white-space:nowrap; }
+  #card button.btn-inline:hover { background:#2a3247; }
 
   #cityResults { display:grid; gap:4px; margin-top:-6px; }
   #cityResults button { text-align:left; background:#0a0c11; border:1px solid #2a3040; font-size:14px; padding:9px 10px; }
   #cityResults .none { font-size:13px; color:#7d879c; padding:4px 2px; }
 
-  /* Onglet Alertes */
+  /* Onglet Alertes & Synchro */
   #card label.chk { display:flex; align-items:center; gap:10px; font-size:14px; color:#e8ecf5; cursor:pointer; background:#0a0c11; border:1px solid #2a3040; padding:11px 12px; border-radius:9px; }
   #card label.chk input[type="checkbox"] { width:18px; height:18px; accent-color:#1c4fd6; cursor:pointer; flex:none; }
   #notifDetails { display:grid; gap:12px; }
-  .ntfy-actions { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; }
-  .btn-ntfy { display:flex; align-items:center; justify-content:center; background:#182238; border:1px solid #2b3f6b; color:#b7ceff; border-radius:8px; padding:10px; font-size:14px; font-weight:500; text-decoration:none; text-align:center; }
+  .sync-box { background:#0a0c11; border:1px solid #222736; border-radius:9px; padding:11px; display:grid; gap:10px; }
+  .sync-box input { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; color:#9fc0ff; }
+  .ntfy-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn-ntfy { display:flex; align-items:center; justify-content:center; background:#182238; border:1px solid #2b3f6b; color:#b7ceff; border-radius:8px; padding:10px 8px; font-size:13px; font-weight:500; text-decoration:none; text-align:center; }
   .btn-ntfy:hover { background:#1f2d4a; }
-  #card button#copyNtfy { font-size:13px; padding:10px; background:#1e2433; border:1px solid #2a3040; }
-  .topic-tag { font-size:12px; color:#7d879c; font-family:ui-monospace,Menlo,Consolas,monospace; text-align:center; }
+  #card button#copySyncLink { font-size:13px; padding:10px 8px; background:#1e2433; border:1px solid #2a3040; }
   #card button#testNotif { background:#1e2433; border:1px solid #2a3040; color:#cfd6e6; font-size:13px; padding:9px; }
   #card button#testNotif:hover { background:#272f42; }
 
@@ -121,7 +124,7 @@
       </label>
     </div>
 
-    <!-- Onglet 2 : Notifications zénith -->
+    <!-- Onglet 2 : Notifications zénith & Synchro -->
     <div id="tab-notif" class="tab-panel" hidden>
       <label class="chk">
         <input id="notifEnabled" type="checkbox">
@@ -142,22 +145,31 @@
           </label>
         </div>
 
-        <div class="ntfy-actions">
-          <a id="ntfyLink" class="btn-ntfy" href="#" target="_blank" rel="noopener">Ouvrir dans ntfy</a>
-          <button id="copyNtfy" type="button">Copier le code</button>
-        </div>
-        <div id="ntfyCodeLabel" class="topic-tag"></div>
-
         <button id="testNotif" type="button">Tester la notification</button>
-
-        <details class="pc-help">
-          <summary>Comment installer sur iPhone, Apple Watch ou PC ?</summary>
-          <div class="help-body">
-            <p><b>Sur iPhone / Apple Watch :</b> téléchargez l’app gratuite <b>ntfy</b> (App Store), appuyez sur <b>+</b> et collez le code du canal (ou touchez <i>Ouvrir dans ntfy</i> depuis l’iPhone). Les alertes apparaîtront automatiquement sur votre Apple Watch.</p>
-            <p><b>Sur PC :</b> cliquez sur <i>Ouvrir dans ntfy</i> pour recevoir les alertes directement dans un onglet du navigateur.</p>
-          </div>
-        </details>
       </div>
+
+      <!-- Bloc toujours visible pour synchroniser PC <-> Téléphone -->
+      <div class="sync-box">
+        <label>Code de profil (synchro PC ↔ Mobile &amp; ntfy)
+          <div class="input-group">
+            <input id="ntfyTopicInput" type="text" placeholder="radar-xxxxxxxx" autocomplete="off" spellcheck="false">
+            <button id="loadSync" type="button" class="btn-inline" title="Charger les paramètres liés à ce code">Charger</button>
+          </div>
+        </label>
+
+        <div class="ntfy-actions">
+          <button id="copySyncLink" type="button">Lien de synchro</button>
+          <a id="ntfyLink" class="btn-ntfy" href="#" target="_blank" rel="noopener">Ouvrir dans ntfy</a>
+        </div>
+      </div>
+
+      <details class="pc-help">
+        <summary>Synchroniser PC ↔ iPhone et installer ntfy</summary>
+        <div class="help-body">
+          <p><b>Synchroniser votre téléphone avec ce PC :</b> cliquez sur <i>Enregistrer</i> sur le PC, puis cliquez sur <b>Lien de synchro</b> et ouvrez ce lien sur votre iPhone. Tous vos réglages (ville, angle, alertes) seront copiés automatiquement.</p>
+          <p><b>Recevoir les alertes sur iPhone / Apple Watch :</b> installez l’app gratuite <b>ntfy</b>, appuyez sur <b>+</b> et entrez le code de profil ci-dessus.</p>
+        </div>
+      </details>
     </div>
 
     <!-- Onglet 3 : Affichage Radar & Relais -->
@@ -348,27 +360,32 @@ const DEFAULTS = {
   radius:30, refresh:10, lat:48.8566, lon:2.3522,
   proxy:'https://radar-relay.sebnoel.workers.dev',
   follow:'', radarInfo1:'route', radarInfo2:'vrate', scaleDir:45, city:'Paris', showMap:true,
-  notifEnabled:false, notifStart:'09:00', notifEnd:'00:00', notifAngle:15, ntfyTopic:''
+  notifEnabled:false, notifStart:'09:00', notifEnd:'00:00', notifAngle:15, ntfyTopic:'', updatedAt:0
 };
 let cfg = Object.assign({}, DEFAULTS);
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } catch(e){}
-cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
-if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;
-const INFO_KEYS = ['alt','route','speed','type','dist','track','vrate','none'];
-if (!INFO_KEYS.includes(cfg.radarInfo1)) cfg.radarInfo1 = DEFAULTS.radarInfo1;
-if (!INFO_KEYS.includes(cfg.radarInfo2)) cfg.radarInfo2 = DEFAULTS.radarInfo2;
-cfg.scaleDir = +cfg.scaleDir; if (!(cfg.scaleDir >= 0 && cfg.scaleDir < 360 && cfg.scaleDir % 45 === 0)) cfg.scaleDir = DEFAULTS.scaleDir;
-if (!cfg.city) cfg.city = (cfg.lat === DEFAULTS.lat && cfg.lon === DEFAULTS.lon) ? 'Paris' : 'Ma position';
-cfg.showMap = cfg.showMap !== false;
-cfg.notifEnabled = !!cfg.notifEnabled;
-if (!cfg.notifStart) cfg.notifStart = '09:00';
-if (!cfg.notifEnd) cfg.notifEnd = '00:00';
-cfg.notifAngle = Math.min(85, Math.max(1, +cfg.notifAngle || 15));
-if (!cfg.ntfyTopic) {
-  cfg.ntfyTopic = 'radar-' + Math.random().toString(36).slice(2, 10);
-  try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){}
+
+function normalizeCfg(){
+  cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
+  cfg.refresh = Math.min(300, Math.max(2, +cfg.refresh || 10));
+  if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;
+  const INFO_KEYS = ['alt','route','speed','type','dist','track','vrate','none'];
+  if (!INFO_KEYS.includes(cfg.radarInfo1)) cfg.radarInfo1 = DEFAULTS.radarInfo1;
+  if (!INFO_KEYS.includes(cfg.radarInfo2)) cfg.radarInfo2 = DEFAULTS.radarInfo2;
+  cfg.scaleDir = +cfg.scaleDir;
+  if (!(cfg.scaleDir >= 0 && cfg.scaleDir < 360 && cfg.scaleDir % 45 === 0)) cfg.scaleDir = DEFAULTS.scaleDir;
+  if (!cfg.city) cfg.city = (cfg.lat === DEFAULTS.lat && cfg.lon === DEFAULTS.lon) ? 'Paris' : 'Ma position';
+  cfg.showMap = cfg.showMap !== false;
+  cfg.notifEnabled = !!cfg.notifEnabled;
+  if (!cfg.notifStart) cfg.notifStart = '09:00';
+  if (!cfg.notifEnd) cfg.notifEnd = '00:00';
+  cfg.notifAngle = Math.min(85, Math.max(1, +cfg.notifAngle || 15));
+  cfg.follow = String(cfg.follow || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!cfg.ntfyTopic) cfg.ntfyTopic = 'radar-' + Math.random().toString(36).slice(2, 10);
+  delete cfg.radarInfo;
 }
-delete cfg.radarInfo;
+normalizeCfg();
+try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){}
 
 const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Air', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas', OCN:'Discover', EWG:'Eurowings', CFG:'Condor', TOM:'TUI', TUI:'TUI', EXS:'Jet2', BCS:'DHL (EAT)', GEC:'Lufthansa Cargo', CLX:'Cargolux', MSR:'EgyptAir', RAM:'Royal Air Maroc', DAH:'Air Algerie', TAR:'Tunisair', AEE:'Aegean', LOT:'LOT Polish', CSA:'Czech Airlines', BTI:'airBaltic', HOP:'Air France Hop', AEA:'Air Europa', VOE:'Volotea', EZS:'easyJet CH', TRA:'Transavia', SXS:'SunExpress', PGT:'Pegasus', EJU:'easyJet' };
 const TYPES = { B737:'Boeing 737', B738:'Boeing 737-800', B739:'Boeing 737-900', B38M:'Boeing 737 MAX 8', B752:'Boeing 757-200', B763:'Boeing 767-300', B772:'Boeing 777-200', B77W:'Boeing 777-300ER', B788:'Boeing 787-8', B789:'Boeing 787-9', B744:'Boeing 747-400', A318:'Airbus A318', A319:'Airbus A319', A320:'Airbus A320', A321:'Airbus A321', A20N:'Airbus A320neo', A21N:'Airbus A321neo', A332:'Airbus A330-200', A333:'Airbus A330-300', A359:'Airbus A350-900', A388:'Airbus A380', E170:'Embraer 170', E190:'Embraer 190', E195:'Embraer 195', CRJ9:'CRJ-900', AT76:'ATR 72-600', DH8D:'Dash 8 Q400' };
@@ -475,7 +492,7 @@ function saveCfg(){ try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); }
 function resetFollow(){ followMode='auto'; followPlane=null; followAirborne=false; followSeenAir=false; followLastSeen=0; followLow=false; }
 
 function landed(){
-  cfg.follow = ''; saveCfg(); resetFollow(); render();
+  cfg.follow = ''; cfg.updatedAt = Date.now(); saveCfg(); pushFullConfig(); resetFollow(); render();
 }
 
 async function fetchFollow(){
@@ -583,7 +600,50 @@ function start(){
   rotTimer = setInterval(()=>{ idx++; render(); }, 8000);
 }
 
-/* ============ Onglets & Synchronisation Notifications ============ */
+/* ============ Synchronisation Cloud (PC <-> Mobile) & Notifications ============ */
+function cleanTopic(v){
+  return String(v || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+}
+
+async function pushFullConfig(){
+  const topic = cleanTopic(cfg.ntfyTopic);
+  if (topic.length < 4) return;
+  const base = (cfg.proxy || DEFAULTS.proxy).replace(/\/$/, '');
+  const r = await fetch(`${base}/cfg/${encodeURIComponent(topic)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg)
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+  if (j.updatedAt) { cfg.updatedAt = j.updatedAt; saveCfg(); }
+}
+
+async function pullRemoteConfig(topic, force = false){
+  const t = cleanTopic(topic);
+  if (t.length < 4) return false;
+  const base = (cfg.proxy || DEFAULTS.proxy).replace(/\/$/, '');
+  const r = await fetch(`${base}/cfg/${encodeURIComponent(t)}`);
+  if (!r.ok) {
+    if (force) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || 'Profil introuvable');
+    }
+    return false;
+  }
+  const remote = await r.json();
+  if (!remote || typeof remote !== 'object') return false;
+  if (force || (remote.updatedAt && remote.updatedAt > (cfg.updatedAt || 0))) {
+    const keepProxy = cfg.proxy;
+    Object.assign(cfg, remote, { ntfyTopic: t });
+    if (!cfg.proxy) cfg.proxy = keepProxy;
+    normalizeCfg();
+    saveCfg();
+    return true;
+  }
+  return false;
+}
+
 function setTab(name){
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   ['pos','notif','radar'].forEach(t => $('tab-' + t).hidden = (t !== name));
@@ -595,10 +655,16 @@ function updateNotifUI(){
 }
 $('notifEnabled').addEventListener('change', updateNotifUI);
 
+$('ntfyTopicInput').addEventListener('input', () => {
+  const t = cleanTopic($('ntfyTopicInput').value) || cfg.ntfyTopic;
+  $('ntfyLink').href = `https://ntfy.sh/${t}`;
+});
+
 function buildSubPayload(overridePos){
   const pos = overridePos || { lat: cfg.lat, lon: cfg.lon, city: cfg.city };
+  const topic = cleanTopic($('ntfyTopicInput').value) || cfg.ntfyTopic;
   return {
-    topic: cfg.ntfyTopic,
+    topic,
     enabled: $('notifEnabled').checked,
     lat: pos.lat,
     lon: pos.lon,
@@ -623,12 +689,50 @@ async function syncNotif(payload){
   return j;
 }
 
-$('copyNtfy').onclick = async () => {
+function fillSettingsForm(){
+  $('radius').value = cfg.radius;
+  $('refresh').value = cfg.refresh;
+  $('city').value = cfg.city;
+  selPos = null;
+  $('cityResults').hidden = true;
+  $('showMap').value = cfg.showMap ? '1' : '0';
+  $('proxy').value = cfg.proxy || '';
+  $('follow').value = cfg.follow || '';
+  $('radarInfo1').value = cfg.radarInfo1;
+  $('radarInfo2').value = cfg.radarInfo2;
+  $('scaleDir').value = String(cfg.scaleDir);
+
+  $('notifEnabled').checked = !!cfg.notifEnabled;
+  $('notifStart').value = cfg.notifStart || '09:00';
+  $('notifEnd').value = cfg.notifEnd || '00:00';
+  $('notifAngle').value = cfg.notifAngle || 15;
+  $('ntfyTopicInput').value = cfg.ntfyTopic;
+  $('ntfyLink').href = `https://ntfy.sh/${cfg.ntfyTopic}`;
+  updateNotifUI();
+}
+
+$('loadSync').onclick = async () => {
+  const code = cleanTopic($('ntfyTopicInput').value);
+  if (code.length < 4) return status('Entrez un code de profil valide (4 caractères min.)');
   try {
-    await navigator.clipboard.writeText(cfg.ntfyTopic);
-    status('Code copié : ' + cfg.ntfyTopic);
+    status('Chargement des réglages distants…');
+    await pullRemoteConfig(code, true);
+    fillSettingsForm();
+    resetFollow(); idx = 0; start();
+    status('Réglages synchronisés depuis le profil ' + code + ' !');
   } catch(e) {
-    status('Code du canal : ' + cfg.ntfyTopic);
+    status('Impossible de charger : ' + e.message);
+  }
+};
+
+$('copySyncLink').onclick = async () => {
+  const topic = cleanTopic($('ntfyTopicInput').value) || cfg.ntfyTopic;
+  const syncUrl = `${location.href.split('?')[0]}?sync=${encodeURIComponent(topic)}`;
+  try {
+    await navigator.clipboard.writeText(syncUrl);
+    status('Lien de synchro copié ! Ouvrez-le sur votre téléphone.');
+  } catch(e) {
+    status(syncUrl);
   }
 };
 
@@ -653,26 +757,7 @@ $('testNotif').onclick = async () => {
 /* Paramètres */
 function openSettings(){
   setTab('pos');
-  $('radius').value = cfg.radius;
-  $('refresh').value = cfg.refresh;
-  $('city').value = cfg.city;
-  selPos = null;
-  $('cityResults').hidden = true;
-  $('showMap').value = cfg.showMap ? '1' : '0';
-  $('proxy').value = cfg.proxy || '';
-  $('follow').value = cfg.follow || '';
-  $('radarInfo1').value = cfg.radarInfo1;
-  $('radarInfo2').value = cfg.radarInfo2;
-  $('scaleDir').value = String(cfg.scaleDir);
-
-  $('notifEnabled').checked = !!cfg.notifEnabled;
-  $('notifStart').value = cfg.notifStart || '09:00';
-  $('notifEnd').value = cfg.notifEnd || '00:00';
-  $('notifAngle').value = cfg.notifAngle || 15;
-  $('ntfyLink').href = `https://ntfy.sh/${cfg.ntfyTopic}`;
-  $('ntfyCodeLabel').textContent = `Canal privé : ${cfg.ntfyTopic}`;
-  updateNotifUI();
-
+  fillSettingsForm();
   $('settings').classList.add('open');
 }
 $('gear').onclick = openSettings;
@@ -686,9 +771,10 @@ $('save').onclick = async () => {
       catch(e){ return status('Recherche de ville impossible : ' + e.message); }
     } else pos = { label:cfg.city, lat:cfg.lat, lon:cfg.lon };
   }
+  const newTopic = cleanTopic($('ntfyTopicInput').value) || cfg.ntfyTopic;
   cfg = {
     radius: Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)),
-    refresh: +$('refresh').value||DEFAULTS.refresh,
+    refresh: Math.min(300, Math.max(2, +$('refresh').value||DEFAULTS.refresh)),
     lat: pos.lat, lon: pos.lon, city: pos.label,
     showMap: $('showMap').value==='1',
     proxy: $('proxy').value.trim().replace(/\/$/,''),
@@ -700,14 +786,19 @@ $('save').onclick = async () => {
     notifStart: $('notifStart').value || '09:00',
     notifEnd: $('notifEnd').value || '00:00',
     notifAngle: Math.min(85, Math.max(1, +$('notifAngle').value || 15)),
-    ntfyTopic: cfg.ntfyTopic
+    ntfyTopic: newTopic,
+    updatedAt: Date.now()
   };
+  normalizeCfg();
   saveCfg(); resetFollow();
 
   try {
-    await syncNotif(buildSubPayload(pos));
+    await Promise.all([
+      pushFullConfig(),
+      syncNotif(buildSubPayload(pos))
+    ]);
   } catch(e) {
-    status('Réglages sauvés en local, mais synchro notification impossible : ' + e.message);
+    status('Réglages sauvés en local, mais synchro cloud impossible : ' + e.message);
     idx=0; start();
     return;
   }
@@ -850,8 +941,8 @@ function drawRadar(t){
   if (cfg.notifEnabled){
     const tanA = Math.tan((cfg.notifAngle || 15) * Math.PI / 180);
     const pxPerKm = R / cfg.radius;
-    const rCruisePx = 10.668 * tanA * pxPerKm; // FL350 (35 000 ft = 10,67 km)
-    const rLowPx = 3.048 * tanA * pxPerKm;     // FL100 (10 000 ft = 3,05 km)
+    const rCruisePx = 10.668 * tanA * pxPerKm;
+    const rLowPx = 3.048 * tanA * pxPerKm;
 
     c.save();
     c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.clip();
@@ -909,7 +1000,6 @@ function drawRadar(t){
     const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
     if (Math.hypot(px-cx,py-cy) > R + s) continue;
 
-    // Vérification en temps réel si l'avion est dans le cône ou sélectionné via notification
     const dk = Math.hypot(x,y);
     const altKm = (typeof p.alt_baro === 'number' && p.alt_baro > 300) ? p.alt_baro * 0.0003048 : null;
     const zAngle = altKm ? Math.atan2(dk, altKm) * 180 / Math.PI : 90;
@@ -975,6 +1065,7 @@ wake();
 async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
 keepAwake(); document.addEventListener('visibilitychange', () => document.visibilityState==='visible' && keepAwake());
 
+/* ============ Démarrage & Synchronisation automatique ============ */
 const qp = new URLSearchParams(location.search);
 if (qp.get('hex')) {
   pickedHex = qp.get('hex');
@@ -987,6 +1078,19 @@ if (qp.get('view') === 'radar') {
 
 show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
 start();
+
+const syncParam = cleanTopic(qp.get('sync'));
+if (syncParam.length >= 4) {
+  cfg.ntfyTopic = syncParam;
+  saveCfg();
+  pullRemoteConfig(syncParam, true)
+    .then(ok => { if (ok) { resetFollow(); idx = 0; start(); } })
+    .catch(() => {});
+} else {
+  pullRemoteConfig(cfg.ntfyTopic, false)
+    .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
+    .catch(() => {});
+}
 </script>
 </body>
 </html>
