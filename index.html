@@ -13,6 +13,7 @@
   body { display:flex; align-items:center; justify-content:center; }
   #led { display:block; background:#05060a; image-rendering:pixelated; }
 
+  body.idle, body.idle * { cursor:none !important; }
   #gear { position:fixed; top:max(8px, env(safe-area-inset-top)); right:10px; z-index:5; background:none; border:0; color:#fff; opacity:.18; font-size:26px; padding:8px; cursor:pointer; }
   #gear:hover,#gear:focus { opacity:.8; }
 
@@ -433,6 +434,12 @@ function toggleFS(){
 }
 cvs.addEventListener('dblclick', toggleFS);
 addEventListener('keydown', e => { if ((e.key==='f' || e.key==='F') && !/INPUT/.test(document.activeElement.tagName)) toggleFS(); });
+
+/* Curseur de souris : masqué après 3 s sans mouvement */
+let idleT;
+function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (!$('settings').classList.contains('open')) document.body.classList.add('idle'); }, 3000); }
+['mousemove','mousedown','touchstart','keydown'].forEach(ev => addEventListener(ev, wake, { passive:true }));
+wake();
 
 /* Écran toujours allumé (si supporté) */
 async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
