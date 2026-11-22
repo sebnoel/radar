@@ -243,18 +243,31 @@ function demoPlanes(){
   ];
 }
 
+const routeTry = {};
 async function fetchRoute(p){
   const cs = (p.flight||'').trim();
-  if(!cs || routeCache[cs] !== undefined) return;
-  routeCache[cs] = null;
-  try {
-    const j = await getJSON((cfg.proxy || 'https://api.adsb.lol') + '/api/0/routeset', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ planes:[{ callsign:cs, lat:p.lat, lng:p.lon }] })
-    });
-    const c = j?.[0]?._airport_codes_iata;
-    if (c && c !== 'unknown') { routeCache[cs] = c.replace('-', ' -> '); render(); }
+  if (!cs || routeCache[cs] || (routeTry[cs] && Date.now()-routeTry[cs] < 120000)) return;   // nouvel essai après 2 min
+  routeTry[cs] = Date.now();
+  const base = cfg.proxy || 'https://api.adsb.lol';
+  let code = null;
+  try {                                            // 1) adsb.lol : GET /api/0/route/{indicatif}/{lat}/{lon}
+    let j = await getJSON(`${base}/api/0/route/${encodeURIComponent(cs)}/${p.lat}/${p.lon}`);
+    if (Array.isArray(j)) j = j[0];
+    if (j && j.plausible !== false && j.plausible !== 0)
+      code = j._airport_codes_iata || (j._airports||[]).map(a=>a.iata).filter(Boolean).join('-') || null;
   } catch(e){}
+  if ((!code || code==='unknown') && cfg.proxy){   // 2) secours : adsbdb
+    try {
+      const j = await getJSON(`${cfg.proxy}/adsbdb/v0/callsign/${encodeURIComponent(cs)}`);
+      const f = j?.response?.flightroute;
+      if (f?.origin?.iata_code && f?.destination?.iata_code) code = f.origin.iata_code + '-' + f.destination.iata_code;
+    } catch(e){}
+  }
+  if (code && code !== 'unknown' && code.includes('-')){
+    const parts = code.split('-');
+    routeCache[cs] = `${parts[0]} -> ${parts[parts.length-1]}`;
+    render();
+  }
 }
 
 function showError(m){
