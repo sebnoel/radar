@@ -563,6 +563,10 @@ async function tick(){
                .filter(a => a._d <= cfg.radius)
                .sort((a,b) => a._d - b._d);
     planes.slice(0, (cfg.radarInfo1 === 'route' || cfg.radarInfo2 === 'route') ? 12 : 3).forEach(fetchRoute);
+    if (pickedHex && Date.now() < pickedUntil){
+      const q = planes.find(a => a.hex === pickedHex);
+      if (q) fetchRoute(q);
+    }
     status(`${planes.length} avion(s) • source ${lastSource} • ${hhmm(new Date())}`);
   } catch(e){
     planes = []; status('Erreur réseau : ' + e.message); console.error(e);
@@ -852,11 +856,9 @@ function drawRadar(t){
     c.save();
     c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.clip();
 
-    // Halo ambre doux de la zone de croisière
     c.fillStyle = 'rgba(255, 190, 60, 0.08)';
     c.beginPath(); c.arc(cx, cy, Math.min(R, rCruisePx), 0, 6.2832); c.fill();
 
-    // Cercle pointillé extérieur (FL350)
     if (rCruisePx <= R){
       c.setLineDash([5*d, 4*d]);
       c.strokeStyle = 'rgba(255, 190, 60, 0.72)';
@@ -864,7 +866,6 @@ function drawRadar(t){
       c.beginPath(); c.arc(cx, cy, rCruisePx, 0, 6.2832); c.stroke();
     }
 
-    // Cercle pointillé intérieur (FL100) pour visualiser l'évasement du cône
     if (rLowPx >= 8*d && rLowPx < rCruisePx - 10*d && rLowPx <= R){
       c.setLineDash([3*d, 4*d]);
       c.strokeStyle = 'rgba(255, 190, 60, 0.35)';
@@ -873,7 +874,6 @@ function drawRadar(t){
     }
     c.setLineDash([]);
 
-    // Légende sous le cercle FL350
     if (rCruisePx >= 22*d && rCruisePx <= R - 14*d){
       const zf = Math.max(9*d, R*0.022);
       c.font = mono(zf);
@@ -894,7 +894,7 @@ function drawRadar(t){
     if (sdy === 0) ty -= lf*0.8;
     c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', tx, ty); }
   c.textAlign = 'left';
-  c.textAlign = 'center'; c.fillText('N', cx, cy - R - 0*d + lf*0.1 + 0); c.textAlign = 'left';
+  c.textAlign = 'center'; c.fillText('N', cx, cy - R + lf*0.1); c.textAlign = 'left';
 
   c.fillStyle = '#f4ffd0'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 12*d;
   c.beginPath(); c.arc(cx,cy,5*d,0,6.2832); c.fill(); c.shadowBlur = 0;
@@ -909,11 +909,12 @@ function drawRadar(t){
     const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
     if (Math.hypot(px-cx,py-cy) > R + s) continue;
 
-    // Vérification en temps réel si l'avion est dans le cône de son altitude
+    // Vérification en temps réel si l'avion est dans le cône ou sélectionné via notification
     const dk = Math.hypot(x,y);
     const altKm = (typeof p.alt_baro === 'number' && p.alt_baro > 300) ? p.alt_baro * 0.0003048 : null;
     const zAngle = altKm ? Math.atan2(dk, altKm) * 180 / Math.PI : 90;
-    const inAlert = cfg.notifEnabled && zAngle <= cfg.notifAngle;
+    const isPicked = pickedHex && Date.now() < pickedUntil && p.hex === pickedHex;
+    const inAlert = (cfg.notifEnabled && zAngle <= cfg.notifAngle) || isPicked;
 
     if (inAlert){
       c.strokeStyle = 'rgba(255, 190, 60, 0.9)';
@@ -973,6 +974,16 @@ wake();
 
 async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
 keepAwake(); document.addEventListener('visibilitychange', () => document.visibilityState==='visible' && keepAwake());
+
+const qp = new URLSearchParams(location.search);
+if (qp.get('hex')) {
+  pickedHex = qp.get('hex');
+  pickedUntil = Date.now() + 120000;
+}
+if (qp.get('view') === 'radar') {
+  showRadar();
+  addEventListener('pageshow', sizeRadar, { once: true });
+}
 
 show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
 start();
