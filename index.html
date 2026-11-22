@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Flight Display</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  * { box-sizing:border-box; margin:0; }
+  html,body { height:100%; background:#000; overflow:hidden; }
+  body { display:flex; align-items:center; justify-content:center; }
+  #led { display:block; background:#05060a; image-rendering:pixelated; }
+
+  #gear { position:fixed; top:max(8px, env(safe-area-inset-top)); right:10px; z-index:5; background:none; border:0; color:#fff; opacity:.18; font-size:26px; padding:8px; cursor:pointer; }
+  #gear:hover,#gear:focus { opacity:.8; }
+
+  #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.88); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; }
+  #settings.open { display:flex; }
+  #card { background:#12151c; color:#e8ecf5; padding:24px; border-radius:14px; width:min(92vw,400px); display:grid; gap:14px; margin:auto; }
+  #card h2 { font-size:18px; font-weight:600; }
+  #card label { display:grid; gap:6px; font-size:14px; color:#a9b2c7; }
+  #card input { background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
+  #card .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  #card button { border:0; border-radius:8px; padding:11px; font-size:15px; cursor:pointer; background:#2a3040; color:#fff; }
+  #card button.p { background:#1c4fd6; }
+  #status { font-size:12px; color:#7d879c; min-height:1.2em; }
+</style>
+</head>
+<body>
+
+<canvas id="led"></canvas>
+<button id="gear" aria-label="Paramètres">⚙</button>
+
+<div id="settings">
+  <div id="card">
+    <h2>Paramètres</h2>
+    <label>Rayon d’interception (km)
+      <input id="radius" type="number" min="1" max="200" step="1">
+    </label>
+    <label>Rafraîchissement (secondes)
+      <input id="refresh" type="number" min="2" max="300" step="1">
+    </label>
+    <div class="row">
+      <label>Latitude <input id="lat" type="number" step="0.0001"></label>
+      <label>Longitude <input id="lon" type="number" step="0.0001"></label>
+    </div>
+    <label>Relais (optionnel, URL du Worker)
+      <input id="proxy" type="url" placeholder="https://radar-relay.sebnoel.workers.dev">
+    </label>
+    <button id="geo" type="button">Utiliser ma position</button>
+    <div class="row">
+      <button id="close" type="button">Fermer</button>
+      <button id="save" type="button" class="p">Enregistrer</button>
+    </div>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ============ Matrice de LEDs : 128 x 72 points ============ */
+const W = 128, H = 72;
+const fb = new Uint8Array(W*H*3);               // 1 point = 1 LED (RGB, 0 = éteinte)
+const FONT = [0,0,0,0,0,0,0,95,0,0,0,7,0,7,0,20,127,20,127,20,36,42,127,42,18,35,19,8,100,98,54,73,86,32,80,0,8,7,3,0,0,28,34,65,0,0,65,34,28,0,42,28,127,28,42,8,8,62,8,8,0,128,112,48,0,8,8,8,8,8,0,0,96,96,0,32,16,8,4,2,62,81,73,69,62,0,66,127,64,0,114,73,73,73,70,33,65,73,77,51,24,20,18,127,16,39,69,69,69,57,60,74,73,73,49,65,33,17,9,7,54,73,73,73,54,70,73,73,41,30,0,0,20,0,0,0,64,52,0,0,0,8,20,34,65,20,20,20,20,20,0,65,34,20,8,2,1,89,9,6,62,65,93,89,78,124,18,17,18,124,127,73,73,73,54,62,65,65,65,34,127,65,65,65,62,127,73,73,73,65,127,9,9,9,1,62,65,65,81,115,127,8,8,8,127,0,65,127,65,0,32,64,65,63,1,127,8,20,34,65,127,64,64,64,64,127,2,28,2,127,127,4,8,16,127,62,65,65,65,62,127,9,9,9,6,62,65,81,33,94,127,9,25,41,70,38,73,73,73,50,3,1,127,1,3,63,64,64,64,63,31,32,64,32,31,63,64,56,64,63,99,20,8,20,99,3,4,120,4,3,97,89,73,77,67,0,127,65,65,65,2,4,8,16,32,0,65,65,65,127,4,2,1,2,4,64,64,64,64,64,0,3,7,8,0,32,84,84,120,64,127,40,68,68,56,56,68,68,68,40,56,68,68,40,127,56,84,84,84,24,0,8,126,9,2,24,164,164,156,120,127,8,4,4,120,0,68,125,64,0,32,64,64,61,0,127,16,40,68,0,0,65,127,64,0,124,4,120,4,120,124,8,4,4,120,56,68,68,68,56,252,24,36,36,24,24,36,36,24,252,124,8,4,4,8,72,84,84,84,36,4,4,63,68,36,60,64,64,32,124,28,32,64,32,28,60,64,48,64,60,68,40,16,40,68,76,144,144,144,124,68,100,84,76,68,0,8,54,65,0,0,0,119,0,0,0,65,54,8,0,2,1,2,4,2];                         // police 5x8, caractères 32..126
+
+const WHITE=[244,247,255], GREEN=[53,224,107];
+const clean = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e]/g,'?');
+function put(x,y,c){ if(x<0||y<0||x>=W||y>=H) return; const i=(y*W+x)*3; fb[i]=c[0]; fb[i+1]=c[1]; fb[i+2]=c[2]; }
+function rect(x,y,w,h,c){ for(let j=0;j<h;j++) for(let i=0;i<w;i++) put(x+i,y+j,c); }
+function textW(s,sc=1){ return s.length ? (s.length*6-1)*sc : 0; }
+function text(s,x,y,c=WHITE,sc=1){
+  s = clean(s);
+  for (const ch of s){
+    const k = ch.charCodeAt(0)-32;
+    for (let cx=0;cx<5;cx++){ const col = FONT[k*5+cx];
+      for (let ry=0;ry<8;ry++) if (col>>ry & 1) rect(x+cx*sc, y+ry*sc, sc, sc, c);
+    }
+    x += 6*sc;
+  }
+}
+const textR = (s,xr,y,c) => text(s, xr-textW(clean(s)), y, c);
+const fit = (s,n) => { s = clean(s); return s.length>n ? s.slice(0,n) : s; };
+
+const hex = h => [1,3,5].map(i => parseInt(h.slice(i,i+2),16));
+function hsl(h,s,l){ s/=100; l/=100; const k=n=>(n+h/30)%12, a=s*Math.min(l,1-l), f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1))); return [f(0),f(8),f(4)].map(v=>Math.round(v*255)); }
+
+/* Logos : pastille aux couleurs de la compagnie (ICAO -> [fond, code IATA, texte]) */
+const BRAND = { UAL:['#0033a0','UA'], AAL:['#0078d2','AA'], DAL:['#c01933','DL'], SWA:['#304cb2','WN'], JBU:['#003876','B6'], ACA:['#f01428','AC'],
+  AFR:['#002157','AF'], BAW:['#075aaa','BA'], DLH:['#05164d','LH'], KLM:['#00a1de','KL'], RYR:['#073590','FR'], EZY:['#ff6600','U2'], UAE:['#d71921','EK'],
+  IBE:['#d7192d','IB'], VLG:['#ffcc00','VY','#222222'], TVF:['#00b140','HV'], SWR:['#e60000','LX'], SAS:['#000b6b','SK'], TAP:['#00a651','TP'],
+  FDX:['#4d148c','FX'], UPS:['#5a3a22','5X'], QTR:['#5c0632','QR'], THY:['#c8102e','TK'], ETD:['#bd8b13','EY'], AZA:['#0b3a74','AZ'], AUA:['#d7141a','OS'],
+  BEL:['#00a9e0','SN'], FIN:['#0b1560','AY'], EIN:['#00a68e','EI'], NAX:['#d81939','DY'], WZZ:['#c6007e','W6'], ELY:['#0b3a7a','LY'], SIA:['#f99f1c','SQ','#222222'],
+  CPA:['#00655b','CX'], ANA:['#1b3b8a','NH'], JAL:['#cc0000','JL'], KAL:['#00256c','KE'], QFA:['#e0001b','QF'] };
+
+
+/* Vrais logos : chargés via le relais (/logo/XX), convertis en 32x32 LEDs, mis en cache */
+const logoCache = {};
+function loadLogo(icao){
+  const b = BRAND[icao]; if (!b || logoCache[icao]) return;
+  logoCache[icao] = 'loading';
+  const img = new Image(); img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = LS;
+      const g = c.getContext('2d'); g.fillStyle = '#e9edf5'; g.fillRect(0,0,LS,LS);
+      g.imageSmoothingQuality = 'high'; g.drawImage(img, 2, 2, LS-4, LS-4);
+      const d = g.getImageData(0,0,LS,LS).data, a = new Uint8Array(LS*LS*3);
+      for (let i=0;i<LS*LS;i++){ a[i*3]=d[i*4]; a[i*3+1]=d[i*4+1]; a[i*3+2]=d[i*4+2]; }
+      logoCache[icao] = a; if (scene.logo === icao) paint();
+    } catch(e){ logoCache[icao] = 'none'; }
+  };
+  img.onerror = () => { logoCache[icao] = 'none'; };
+  img.src = cfg.proxy ? `${cfg.proxy}/logo/${b[1]}` : `https://images.kiwi.com/airlines/64x64/${b[1]}.png`;
+}
+
+const LX=4, LY=3, LS=32;                          // zone du logo (32 x 32 LEDs)
+function drawLogo(icao){
+  if (!icao){                                      // globe par défaut
+    const bg=[28,79,214], fg=[159,192,255];
+    rect(LX,LY,LS,LS,bg);
+    for (let y=0;y<LS;y++) for (let x=0;x<LS;x++){
+      const dx=x-15.5, dy=y-15.5, d=Math.hypot(dx,dy);
+      const ring = Math.abs(d-14) < .75;
+      const eq = d<14 && (Math.abs(dy)<.6 || Math.abs(Math.abs(dy)-7.5)<.6);
+      const mer = d<14 && (Math.abs(dx)<.6 || Math.abs((dx/7)**2+(dy/14)**2-1)<.14);
+      if (ring||eq||mer) put(LX+x,LY+y,fg);
+    }
+    return;
+  }
+  const cl = logoCache[icao];
+  if (cl && cl !== 'loading' && cl !== 'none'){            // vrai logo chargé
+    for (let y=0;y<LS;y++) for (let x=0;x<LS;x++){ const k=(y*LS+x)*3; put(LX+x,LY+y,[cl[k],cl[k+1],cl[k+2]]); }
+    return;
+  }
+  loadLogo(icao);                                          // sinon : pastille en attendant / en secours
+  let b = BRAND[icao], bg, code, fg=WHITE;
+  if (b){ bg=hex(b[0]); code=b[1]; if (b[2]) fg=hex(b[2]); }
+  else { let h=0; for(const c of icao) h=(h*31+c.charCodeAt(0))%360; bg=hsl(h,65,38); code=icao.slice(0,3); }
+  rect(LX,LY,LS,LS,bg);
+  const sc = code.length<=2 ? 2 : 1, w = textW(code,sc), h = 7*sc;
+  text(code, LX+Math.round((LS-w)/2), LY+Math.round((LS-h)/2), fg, sc);
+}
+
+/* ---- Contenu affiché ---- */
+const scene = { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0 };
+const TX = 40, TR = 124, XL = 4, XR = 124;        // colonnes de texte
+function compose(){
+  fb.fill(0);
+  drawLogo(scene.logo);
+  text(fit(scene.l1,14), TX, 3);
+  text(fit(scene.l2,14), TX, 14);
+  if (scene.bar>0) rect(TX, 24, Math.round((TR-TX)*Math.min(1,scene.bar)), 2, GREEN);
+  text(fit(scene.l3,14), TX, 28);
+  text(fit(scene.l4,20), XL, 39);
+  text(fit(scene.l5l, scene.l5r ? 12 : 20), XL, 50);
+  textR(fit(scene.l5r,9), XR, 50);
+  text(fit(scene.l6,20), XL, 61);
+}
+
+/* ---- Rendu : chaque LED est un disque, taille entière en pixels écran = net ---- */
+const cvs = $('led'), ctx = cvs.getContext('2d');
+const lit = document.createElement('canvas');
+function paint(){
+  compose();
+  const dpr = window.devicePixelRatio || 1;
+  const p = Math.max(3, Math.floor(Math.min(innerWidth/W, innerHeight/H) * dpr));
+  cvs.width = W*p; cvs.height = H*p;
+  cvs.style.width = (W*p/dpr)+'px'; cvs.style.height = (H*p/dpr)+'px';
+  lit.width = W*p; lit.height = H*p;
+  const lc = lit.getContext('2d'), r = p*0.40;
+  ctx.fillStyle = '#05060a'; ctx.fillRect(0,0,cvs.width,cvs.height);
+  // LEDs éteintes
+  ctx.fillStyle = '#10131a'; ctx.beginPath();
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){ const i=(y*W+x)*3; if (!(fb[i]|fb[i+1]|fb[i+2])){ ctx.moveTo((x+.5)*p+r,(y+.5)*p); ctx.arc((x+.5)*p,(y+.5)*p,r*.8,0,6.2832); } }
+  ctx.fill();
+  // LEDs allumées
+  lc.clearRect(0,0,lit.width,lit.height);
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i=(y*W+x)*3; if (!(fb[i]|fb[i+1]|fb[i+2])) continue;
+    lc.fillStyle = `rgb(${fb[i]},${fb[i+1]},${fb[i+2]})`;
+    lc.beginPath(); lc.arc((x+.5)*p,(y+.5)*p,r,0,6.2832); lc.fill();
+  }
+  if ('filter' in ctx){ ctx.filter = `blur(${p*0.55}px)`; ctx.globalAlpha = .55; ctx.drawImage(lit,0,0); ctx.filter='none'; ctx.globalAlpha = 1; }
+  ctx.drawImage(lit,0,0);
+}
+addEventListener('resize', paint);
+
+/* ============ Données de vol ============ */
+const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev' };
+let cfg = Object.assign({}, DEFAULTS);
+try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } catch(e){}
+cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
+if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;   // anciens réglages sans relais
+
+const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Air', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas' };
+const TYPES = { B737:'Boeing 737', B738:'Boeing 737-800', B739:'Boeing 737-900', B38M:'Boeing 737 MAX 8', B752:'Boeing 757-200', B763:'Boeing 767-300', B772:'Boeing 777-200', B77W:'Boeing 777-300ER', B788:'Boeing 787-8', B789:'Boeing 787-9', B744:'Boeing 747-400', A318:'Airbus A318', A319:'Airbus A319', A320:'Airbus A320', A321:'Airbus A321', A20N:'Airbus A320neo', A21N:'Airbus A321neo', A332:'Airbus A330-200', A333:'Airbus A330-300', A359:'Airbus A350-900', A388:'Airbus A380', E170:'Embraer 170', E190:'Embraer 190', E195:'Embraer 195', CRJ9:'CRJ-900', AT76:'ATR 72-600', DH8D:'Dash 8 Q400' };
+const routeCache = {};
+let planes = [], idx = 0, timer = null, rotTimer = null, lastSource = '';
+
+function status(m){ $('status').textContent = m; }
+function show(o){ Object.assign(scene, { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0 }, o); paint(); }
+
+function km(lat1,lon1,lat2,lon2){
+  const R=6371, r=Math.PI/180, dLat=(lat2-lat1)*r, dLon=(lon2-lon1)*r;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+const hhmm = d => d.toTimeString().slice(0,5);
+async function getJSON(url, opt){ const r = await fetch(url, opt); if(!r.ok) throw new Error(r.status); return r.json(); }
+
+async function fetchPlanes(){
+  if (new URLSearchParams(location.search).has('demo')) return demoPlanes();
+  const nm = Math.min(250, Math.max(1, cfg.radius/1.852)).toFixed(1);
+  const errs = [];
+  const base = cfg.proxy || 'https://api.adsb.lol';
+  const sources = [
+    ['adsb.lol',      `${base}/v2/point/${cfg.lat}/${cfg.lon}/${nm}`],
+    ['airplanes.live',`https://api.airplanes.live/v2/point/${cfg.lat}/${cfg.lon}/${nm}`]
+  ];
+  for (const [name,u] of sources){
+    try { const j = await getJSON(u); lastSource = name; return j.ac || j.aircraft || []; }
+    catch(e){ errs.push(name+': '+e.message); }
+  }
+  try {
+    const dLat = cfg.radius/111, dLon = cfg.radius/(111*Math.cos(cfg.lat*Math.PI/180));
+    const u = `https://opensky-network.org/api/states/all?lamin=${cfg.lat-dLat}&lamax=${cfg.lat+dLat}&lomin=${cfg.lon-dLon}&lomax=${cfg.lon+dLon}`;
+    const j = await getJSON(u); lastSource = 'opensky';
+    return (j.states||[]).filter(x=>!x[8]).map(x=>({ flight:(x[1]||'').trim(), hex:x[0], lon:x[5], lat:x[6],
+      alt_baro: x[7]!=null ? x[7]*3.281 : null, gs: x[9]!=null ? x[9]*1.944 : 0, t:'' }));
+  } catch(e){ errs.push('opensky: '+e.message); }
+  throw new Error(errs.join(' | '));
+}
+
+function demoPlanes(){
+  lastSource = 'demo';
+  const t = Date.now()/1000, r = cfg.radius;
+  return [
+    { flight:'UAL2186', t:'B737', lat:cfg.lat+(r*0.0045)*Math.sin(t/60), lon:cfg.lon+(r*0.004)*Math.cos(t/60), alt_baro:34000, gs:440 },
+    { flight:'AFR1234', t:'A320', lat:cfg.lat-(r*0.003), lon:cfg.lon+(r*0.002), alt_baro:12500, gs:310 }
+  ];
+}
+
+async function fetchRoute(p){
+  const cs = (p.flight||'').trim();
+  if(!cs || routeCache[cs] !== undefined) return;
+  routeCache[cs] = null;
+  try {
+    const j = await getJSON((cfg.proxy || 'https://api.adsb.lol') + '/api/0/routeset', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ planes:[{ callsign:cs, lat:p.lat, lng:p.lon }] })
+    });
+    const c = j?.[0]?._airport_codes_iata;
+    if (c && c !== 'unknown') { routeCache[cs] = c.replace('-', ' -> '); render(); }
+  } catch(e){}
+}
+
+function showError(m){
+  const e = String(m).replace(/Failed to fetch/g,'blocked').split(' | ');
+  show({ l1:'Network', l2:'Error', l4:'API unreachable', l5l:e[0]||'', l6:e[1]||'' });
+}
+
+function render(){
+  if(!planes.length){
+    show({ l1:'Radar', l2:'No aircraft', l4:`Radius ${cfg.radius}km`, l5l:`Src ${lastSource}`, l6:`Every ${cfg.refresh}s` });
+    return;
+  }
+  const p = planes[idx % planes.length];
+  const cs = (p.flight||p.hex||'').trim();
+  const icao = /^[A-Z]{3}\d/.test(cs) ? cs.slice(0,3) : '';
+  const airline = AIRLINES[icao] || (p.ownOp || 'Flight');
+  const type = TYPES[p.t] || p.desc || p.t || 'Unknown type';
+  const d = p._d, gs = p.gs || 0;
+  const eta = gs > 30 ? hhmm(new Date(Date.now() + d/(gs*1.852)*3600000)) : '--:--';
+  const alt = typeof p.alt_baro === 'number' ? Math.round(p.alt_baro/100)*100 + 'ft' : 'ground';
+  show({ logo:icao, l1:airline, l2:cs, l3:routeCache[cs] || '---', l4:type,
+         l5l:`Alt ${alt}`, l5r:`ETA ${eta}`, l6:`${d.toFixed(1)}km to go`, bar:Math.max(0.03, 1 - d/cfg.radius) });
+}
+
+async function tick(){
+  try {
+    const ac = await fetchPlanes();
+    planes = ac.filter(a => typeof a.lat==='number' && typeof a.lon==='number')
+               .map(a => Object.assign(a, { _d: km(cfg.lat,cfg.lon,a.lat,a.lon) }))
+               .filter(a => a._d <= cfg.radius)
+               .sort((a,b) => a._d - b._d);
+    planes.slice(0,3).forEach(fetchRoute);
+    status(`${planes.length} avion(s) • source ${lastSource} • ${hhmm(new Date())}`);
+  } catch(e){ planes = []; status('Erreur réseau : ' + e.message); console.error(e); showError(e.message); return; }
+  render();
+}
+
+function start(){
+  clearInterval(timer); clearInterval(rotTimer);
+  tick();
+  timer = setInterval(tick, Math.max(2, cfg.refresh)*1000);
+  rotTimer = setInterval(()=>{ idx++; render(); }, 8000);
+}
+
+/* Paramètres */
+function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('settings').classList.add('open'); }
+$('gear').onclick = openSettings;
+$('close').onclick = () => $('settings').classList.remove('open');
+$('save').onclick = () => {
+  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,'') };
+  try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){}
+  $('settings').classList.remove('open'); idx=0; start();
+};
+$('geo').onclick = () => navigator.geolocation?.getCurrentPosition(
+  pos => { $('lat').value = pos.coords.latitude.toFixed(4); $('lon').value = pos.coords.longitude.toFixed(4); },
+  () => status('Position refusée')
+);
+
+/* Plein écran : double-clic / double-toucher sur l'écran, ou touche F */
+function toggleFS(){
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+  else { (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); }
+}
+cvs.addEventListener('dblclick', toggleFS);
+addEventListener('keydown', e => { if ((e.key==='f' || e.key==='F') && !/INPUT/.test(document.activeElement.tagName)) toggleFS(); });
+
+/* Écran toujours allumé (si supporté) */
+async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
+keepAwake(); document.addEventListener('visibilitychange', () => document.visibilityState==='visible' && keepAwake());
+
+show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
+start();
+</script>
+</body>
+</html>
