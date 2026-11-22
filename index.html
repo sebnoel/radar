@@ -671,7 +671,7 @@ function drawRadar(t){
   c.textBaseline = 'alphabetic';
 }
 
-rcv.addEventListener('click', e => {                              // clic sur un avion : retour à l'écran, centré sur lui
+function radarClick(e){                                           // clic sur un avion : retour à l'écran, centré sur lui
   const d = window.devicePixelRatio || 1, x = e.offsetX*d, y = e.offsetY*d;
   let best = null, bd = 1e9;
   for (const h of radarHits){
@@ -686,7 +686,10 @@ rcv.addEventListener('click', e => {                              // clic sur un
     const q = planes.find(a => a.hex === best.hex); if (q) fetchRoute(q);
     render();
   }
-});
+}
+let radarClickT = null;                                         // clic = retour à l'écran, double-clic = plein écran
+rcv.addEventListener('click', e => { const pt = { offsetX:e.offsetX, offsetY:e.offsetY }; clearTimeout(radarClickT); radarClickT = setTimeout(() => radarClick(pt), 280); });
+rcv.addEventListener('dblclick', () => { clearTimeout(radarClickT); toggleFS(); });
 
 /* Curseur de souris : masqué après 3 s sans mouvement */
 let idleT;
