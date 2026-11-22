@@ -105,7 +105,7 @@ const BRAND = { UAL:['#0033a0','UA'], AAL:['#0078d2','AA'], DAL:['#c01933','DL']
   IBE:['#d7192d','IB'], VLG:['#ffcc00','VY','#222222'], TVF:['#00b140','HV'], SWR:['#e60000','LX'], SAS:['#000b6b','SK'], TAP:['#00a651','TP'],
   FDX:['#4d148c','FX'], UPS:['#5a3a22','5X'], QTR:['#5c0632','QR'], THY:['#c8102e','TK'], ETD:['#bd8b13','EY'], AZA:['#0b3a74','AZ'], AUA:['#d7141a','OS'],
   BEL:['#00a9e0','SN'], FIN:['#0b1560','AY'], EIN:['#00a68e','EI'], NAX:['#d81939','DY'], WZZ:['#c6007e','W6'], ELY:['#0b3a7a','LY'], SIA:['#f99f1c','SQ','#222222'],
-  CPA:['#00655b','CX'], ANA:['#1b3b8a','NH'], JAL:['#cc0000','JL'], KAL:['#00256c','KE'], QFA:['#e0001b','QF'] };
+  CPA:['#00655b','CX'], ANA:['#1b3b8a','NH'], JAL:['#cc0000','JL'], KAL:['#00256c','KE'], QFA:['#e0001b','QF'], OCN:['#5b2a86','4Y'], EWG:['#a6004a','EW'], CFG:['#f2a900','DE','#222222'], TOM:['#d40e14','BY'], EXS:['#e8212b','LS'], BCS:['#d40511','QY'], GEC:['#05164d','LH'], CLX:['#e2001a','CV'], MSR:['#0b3a74','MS'], RAM:['#c1272d','AT'], DAH:['#d71920','AH'], TAR:['#d71920','TU'], AEE:['#0d5eaf','A3'], LOT:['#11397e','LO'], CSA:['#d7141a','OK'], BTI:['#9bc53d','BT','#222222'], HOP:['#002157','A5'], AEA:['#0d5eaf','UX'], VOE:['#ff5a00','V7'], EZS:['#ff6600','DS'], TRA:['#00b140','HV'], SXS:['#f7931e','XQ','#222222'], PGT:['#ffd400','PC','#222222'], EJU:['#ff6600','EC'] };
 
 
 /* Vrais logos : chargés via le relais (/logo/XX), convertis en 32x32 LEDs, mis en cache */
@@ -207,7 +207,7 @@ try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } 
 cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
 if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;   // anciens réglages sans relais
 
-const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Air', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas' };
+const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Air', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas', OCN:'Discover', EWG:'Eurowings', CFG:'Condor', TOM:'TUI', TUI:'TUI', EXS:'Jet2', BCS:'DHL (EAT)', GEC:'Lufthansa Cargo', CLX:'Cargolux', MSR:'EgyptAir', RAM:'Royal Air Maroc', DAH:'Air Algerie', TAR:'Tunisair', AEE:'Aegean', LOT:'LOT Polish', CSA:'Czech Airlines', BTI:'airBaltic', HOP:'Air France Hop', AEA:'Air Europa', VOE:'Volotea', EZS:'easyJet CH', TRA:'Transavia', SXS:'SunExpress', PGT:'Pegasus', EJU:'easyJet' };
 const TYPES = { B737:'Boeing 737', B738:'Boeing 737-800', B739:'Boeing 737-900', B38M:'Boeing 737 MAX 8', B752:'Boeing 757-200', B763:'Boeing 767-300', B772:'Boeing 777-200', B77W:'Boeing 777-300ER', B788:'Boeing 787-8', B789:'Boeing 787-9', B744:'Boeing 747-400', A318:'Airbus A318', A319:'Airbus A319', A320:'Airbus A320', A321:'Airbus A321', A20N:'Airbus A320neo', A21N:'Airbus A321neo', A332:'Airbus A330-200', A333:'Airbus A330-300', A359:'Airbus A350-900', A388:'Airbus A380', E170:'Embraer 170', E190:'Embraer 190', E195:'Embraer 195', CRJ9:'CRJ-900', AT76:'ATR 72-600', DH8D:'Dash 8 Q400' };
 const routeCache = {};
 let planes = [], idx = 0, timer = null, rotTimer = null, lastSource = '';
@@ -261,23 +261,35 @@ async function fetchRoute(p){
   if (!cs || routeCache[cs] || (routeTry[cs] && Date.now()-routeTry[cs] < 120000)) return;   // nouvel essai après 2 min
   routeTry[cs] = Date.now();
   const base = cfg.proxy || 'https://api.adsb.lol';
-  let code = null;
+  const num = v => typeof v === 'number' && isFinite(v);
+  let code = null, ap = null;                      // ap = [{lat,lon}, ...] du départ à l'arrivée
   try {                                            // 1) adsb.lol : GET /api/0/route/{indicatif}/{lat}/{lon}
     let j = await getJSON(`${base}/api/0/route/${encodeURIComponent(cs)}/${p.lat}/${p.lon}`);
     if (Array.isArray(j)) j = j[0];
-    if (j && j.plausible !== false && j.plausible !== 0)
-      code = j._airport_codes_iata || (j._airports||[]).map(a=>a.iata).filter(Boolean).join('-') || null;
+    if (j && j.plausible !== false && j.plausible !== 0){
+      const list = j._airports || [];
+      code = j._airport_codes_iata || list.map(a=>a.iata).filter(Boolean).join('-') || null;
+      ap = list.filter(a => a && num(a.lat) && num(a.lon));
+    }
   } catch(e){}
-  if ((!code || code==='unknown') && cfg.proxy){   // 2) secours : adsbdb
+  if ((!code || code==='unknown' || !ap || ap.length < 2) && cfg.proxy){     // 2) secours / compléments : adsbdb
     try {
       const j = await getJSON(`${cfg.proxy}/adsbdb/v0/callsign/${encodeURIComponent(cs)}`);
       const f = j?.response?.flightroute;
-      if (f?.origin?.iata_code && f?.destination?.iata_code) code = f.origin.iata_code + '-' + f.destination.iata_code;
+      if (f?.origin?.iata_code && f?.destination?.iata_code){
+        const code2 = f.origin.iata_code + '-' + f.destination.iata_code;
+        const ap2 = (num(f.origin.latitude) && num(f.destination.latitude))
+          ? [{lat:f.origin.latitude, lon:f.origin.longitude}, {lat:f.destination.latitude, lon:f.destination.longitude}] : null;
+        if (!code || code==='unknown'){ code = code2; ap = ap2; }
+        else if ((!ap || ap.length < 2) && code === code2) ap = ap2;
+      }
     } catch(e){}
   }
   if (code && code !== 'unknown' && code.includes('-')){
-    const parts = code.split('-');
-    routeCache[cs] = `${parts[0]} -> ${parts[parts.length-1]}`;
+    const parts = code.split('-'), ok = ap && ap.length >= 2;
+    routeCache[cs] = { text: `${parts[0]} -> ${parts[parts.length-1]}`,
+                       orig: ok ? {lat:ap[0].lat, lon:ap[0].lon} : null,
+                       dest: ok ? {lat:ap[ap.length-1].lat, lon:ap[ap.length-1].lon} : null };
     render();
   }
 }
@@ -339,12 +351,24 @@ function showPlane(p){
   const icao = /^[A-Z]{3}\d/.test(cs) ? cs.slice(0,3) : '';
   const airline = AIRLINES[icao] || (p.ownOp || 'Flight');
   const type = TYPES[p.t] || p.desc || p.t || 'Unknown type';
-  const d = p._d, gs = p.gs || 0;
-  const eta = gs > 30 ? hhmm(new Date(Date.now() + d/(gs*1.852)*3600000)) : '--:--';
-  const alt = typeof p.alt_baro === 'number' ? Math.round(p.alt_baro/100)*100 + 'ft' : 'ground';
-  const dist = d >= 100 ? Math.round(d) : d.toFixed(1);
-  show({ logo:icao, l1:airline, l2:cs, l3:routeCache[cs] || '---', l4:type,
-         l5l:`Alt ${alt}`, l5r:`ETA ${eta}`, l6:`${dist}km to go`, bar:Math.max(0.03, 1 - d/cfg.radius) });
+  const gs = p.gs || 0, rt = routeCache[cs];
+  const fmt = v => v >= 100 ? String(Math.round(v)) : v.toFixed(1);
+
+  // Altitude : niveau de vol au-dessus de 18 000 ft
+  let alt = 'ground';
+  if (typeof p.alt_baro === 'number') alt = p.alt_baro >= 18000 ? 'FL' + String(Math.round(p.alt_baro/100)).padStart(3,'0') : Math.round(p.alt_baro/100)*100 + 'ft';
+  const altTxt = (alt.length <= 6 ? 'Alt ' : '') + alt;
+
+  // Avec la route connue : distance restante, ETA et progression vers l'aéroport d'arrivée
+  let eta = '--:--', toGo = `${fmt(p._d)}km away`, bar = Math.max(0.03, 1 - p._d/cfg.radius);
+  if (rt && rt.dest){
+    const rem = km(p.lat, p.lon, rt.dest.lat, rt.dest.lon);
+    toGo = `${fmt(rem)}km to go`;
+    if (gs > 30) eta = hhmm(new Date(Date.now() + rem/(gs*1.852)*3600000));
+    if (rt.orig){ const tot = km(rt.orig.lat, rt.orig.lon, rt.dest.lat, rt.dest.lon); if (tot > 20) bar = Math.min(1, Math.max(0.03, 1 - rem/tot)); }
+  }
+  show({ logo:icao, l1:airline, l2:cs, l3:rt?.text || '---', l4:type,
+         l5l:altTxt, l5r:`ETA ${eta}`, l6:toGo, bar });
 }
 
 function render(){
