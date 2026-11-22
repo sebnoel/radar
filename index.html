@@ -22,13 +22,13 @@
   #dock button.on { opacity:.75; border-color:rgba(255,255,255,.45); }
   #dock button:hover, #dock button:focus-visible { opacity:1; }
 
-  #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.88); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; }
+  #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.92); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; }
   #settings.open { display:flex; }
-  #card { background:#12151c; color:#e8ecf5; padding:24px; border-radius:14px; width:min(92vw,400px); display:grid; gap:14px; margin:auto; }
+  #card { background:#12151c; color:#e8ecf5; padding:24px; border-radius:14px; width:min(92vw,400px); max-height:94vh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
   #card h2 { font-size:18px; font-weight:600; }
-  #card label { display:grid; gap:6px; font-size:14px; color:#a9b2c7; }
-  #card input { background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
-  #card .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  #card label { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; font-size:14px; color:#a9b2c7; min-width:0; }
+  #card input { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
+  #card .row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; min-width:0; }
   #card button { border:0; border-radius:8px; padding:11px; font-size:15px; cursor:pointer; background:#2a3040; color:#fff; }
   #card button.p { background:#1c4fd6; }
   #status { font-size:12px; color:#7d879c; min-height:1.2em; }
