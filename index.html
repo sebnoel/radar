@@ -28,7 +28,7 @@
   #card { background:#12151c; color:#e8ecf5; padding:24px; border-radius:14px; width:min(92vw,400px); max-height:94vh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
   #card h2 { font-size:18px; font-weight:600; }
   #card label { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; font-size:14px; color:#a9b2c7; min-width:0; }
-  #card input { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
+  #card input, #card select { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
   #card .row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; min-width:0; }
   #card button { border:0; border-radius:8px; padding:11px; font-size:15px; cursor:pointer; background:#2a3040; color:#fff; }
   #card button.p { background:#1c4fd6; }
@@ -60,6 +60,18 @@
     </div>
     <label>Relais (optionnel, URL du Worker)
       <input id="proxy" type="url" placeholder="https://radar-relay.sebnoel.workers.dev">
+    </label>
+    <label>Info sous l’indicatif (vue radar)
+      <select id="radarInfo">
+        <option value="alt">Altitude</option>
+        <option value="route">Origine → destination</option>
+        <option value="speed">Vitesse sol (kt)</option>
+        <option value="type">Type d’avion</option>
+        <option value="dist">Distance jusqu’à moi</option>
+        <option value="track">Cap (°)</option>
+        <option value="vrate">Montée / descente</option>
+        <option value="none">Aucune</option>
+      </select>
     </label>
     <label>Vol à suivre (indicatif, ex. AFR37LF)
       <input id="follow" type="text" placeholder="vide = aucun" autocapitalize="characters" autocomplete="off" spellcheck="false">
@@ -204,11 +216,12 @@ function paint(){
 addEventListener('resize', paint);
 
 /* ============ Données de vol ============ */
-const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev', follow:'' };
+const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev', follow:'', radarInfo:'alt' };
 let cfg = Object.assign({}, DEFAULTS);
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } catch(e){}
 cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
-if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;   // anciens réglages sans relais
+if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;
+if (!['alt','route','speed','type','dist','track','vrate','none'].includes(cfg.radarInfo)) cfg.radarInfo = 'alt';   // anciens réglages sans relais
 
 const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Air', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas', OCN:'Discover', EWG:'Eurowings', CFG:'Condor', TOM:'TUI', TUI:'TUI', EXS:'Jet2', BCS:'DHL (EAT)', GEC:'Lufthansa Cargo', CLX:'Cargolux', MSR:'EgyptAir', RAM:'Royal Air Maroc', DAH:'Air Algerie', TAR:'Tunisair', AEE:'Aegean', LOT:'LOT Polish', CSA:'Czech Airlines', BTI:'airBaltic', HOP:'Air France Hop', AEA:'Air Europa', VOE:'Volotea', EZS:'easyJet CH', TRA:'Transavia', SXS:'SunExpress', PGT:'Pegasus', EJU:'easyJet' };
 const TYPES = { B737:'Boeing 737', B738:'Boeing 737-800', B739:'Boeing 737-900', B38M:'Boeing 737 MAX 8', B752:'Boeing 757-200', B763:'Boeing 767-300', B772:'Boeing 777-200', B77W:'Boeing 777-300ER', B788:'Boeing 787-8', B789:'Boeing 787-9', B744:'Boeing 747-400', A318:'Airbus A318', A319:'Airbus A319', A320:'Airbus A320', A321:'Airbus A321', A20N:'Airbus A320neo', A21N:'Airbus A321neo', A332:'Airbus A330-200', A333:'Airbus A330-300', A359:'Airbus A350-900', A388:'Airbus A380', E170:'Embraer 170', E190:'Embraer 190', E195:'Embraer 195', CRJ9:'CRJ-900', AT76:'ATR 72-600', DH8D:'Dash 8 Q400' };
@@ -401,7 +414,7 @@ async function tick(){
                .map(a => Object.assign(a, { _d: km(cfg.lat,cfg.lon,a.lat,a.lon), _t: Date.now() }))
                .filter(a => a._d <= cfg.radius)
                .sort((a,b) => a._d - b._d);
-    planes.slice(0,3).forEach(fetchRoute);
+    planes.slice(0, cfg.radarInfo === 'route' ? 12 : 3).forEach(fetchRoute);
     status(`${planes.length} avion(s) • source ${lastSource} • ${hhmm(new Date())}`);
   } catch(e){
     planes = []; status('Erreur réseau : ' + e.message); console.error(e);
@@ -419,11 +432,11 @@ function start(){
 }
 
 /* Paramètres */
-function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('follow').value=cfg.follow||''; $('settings').classList.add('open'); }
+function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('follow').value=cfg.follow||''; $('radarInfo').value=cfg.radarInfo||'alt'; $('settings').classList.add('open'); }
 $('gear').onclick = openSettings;
 $('close').onclick = () => $('settings').classList.remove('open');
 $('save').onclick = () => {
-  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,''), follow:$('follow').value.trim().toUpperCase().replace(/\s+/g,'') };
+  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,''), follow:$('follow').value.trim().toUpperCase().replace(/\s+/g,''), radarInfo:$('radarInfo').value };
   saveCfg(); resetFollow();
   $('settings').classList.remove('open'); idx=0; start();
 };
@@ -462,6 +475,19 @@ function radarLoop(t){ if (view !== 'radar') return; drawRadar(t); requestAnimat
 
 const PLANE = [[0,-1],[.12,-.55],[.95,.05],[.95,.22],[.12,0],[.1,.65],[.4,.85],[.4,.98],[0,.88],[-.4,.98],[-.4,.85],[-.1,.65],[-.12,0],[-.95,.22],[-.95,.05],[-.12,-.55]];
 const GL = '90,255,130';
+
+function radarInfoText(p, cs, distKm){
+  switch (cfg.radarInfo){
+    case 'route': return routeCache[cs]?.text.replace(' -> ', ' → ') || '---';
+    case 'speed': return p.gs ? Math.round(p.gs) + ' kt' : '-- kt';
+    case 'type':  return p.t || '--';
+    case 'dist':  return (distKm >= 100 ? Math.round(distKm) : distKm.toFixed(1)) + ' km';
+    case 'track': return typeof p.track === 'number' ? Math.round(p.track) + '°' : '--';
+    case 'vrate': { const r = p.baro_rate; if (typeof r !== 'number') return '--'; return Math.abs(r) < 200 ? '→ level' : (r > 0 ? '↑ ' : '↓ ') + Math.abs(Math.round(r/100)*100) + ' ft/min'; }
+    case 'none':  return '';
+    default:      return typeof p.alt_baro === 'number' ? 'FL' + String(Math.round(p.alt_baro/100)).padStart(3,'0') : 'GND';
+  }
+}
 
 function drawRadar(t){
   const c = rctx, d = window.devicePixelRatio || 1, W = rcv.width, H = rcv.height;
@@ -510,12 +536,12 @@ function drawRadar(t){
     c.beginPath(); PLANE.forEach(([a,b],i) => i ? c.lineTo(a*s,b*s) : c.moveTo(a*s,b*s)); c.closePath(); c.fill();
     c.restore(); c.shadowBlur = 0;
 
-    const cs = (p.flight || p.hex || '?').trim(), alt = typeof p.alt_baro === 'number' ? 'FL' + String(Math.round(p.alt_baro/100)).padStart(3,'0') : 'GND';
+    const cs = (p.flight || p.hex || '?').trim(), info = radarInfoText(p, cs, Math.hypot(x,y));
     const followed = cfg.follow && cs === cfg.follow;
     c.font = mono(fs); c.fillStyle = followed ? '#ffffff' : '#e8ffe0';
     c.shadowColor = '#000'; c.shadowBlur = 4*d;
     const lx = px + s*1.4, ly = py - fs*0.15; c.fillText(cs, lx, ly);
-    c.font = mono(fs*0.75); c.fillStyle = `rgba(${GL},.95)`; c.fillText(alt, lx, ly + fs*0.95); c.shadowBlur = 0;
+    if (info){ c.font = mono(fs*0.75); c.fillStyle = `rgba(${GL},.95)`; c.fillText(info, lx, ly + fs*0.95); } c.shadowBlur = 0;
     c.font = mono(fs);
     radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*2 });
   }
