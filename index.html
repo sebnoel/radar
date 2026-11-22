@@ -1032,4 +1032,137 @@ function drawRadar(t){
       if (Math.abs(sdy) < 0.1) ty -= lf*0.85;
     } else if (k === 4 && sdx > 0.1){
       c.textAlign = 'right'; tx -= 4*d;
-      if
+      if (Math.abs(sdy) < 0.1) ty -= lf*0.85;
+    } else if (sdx > 0.1){
+      c.textAlign = 'left'; tx += 4*d;
+    } else if (sdx < -0.1){
+      c.textAlign = 'right'; tx -= 4*d;
+    } else {
+      c.textAlign = 'left'; tx += lf*1.1;
+    }
+    if (k < 4 && sdy === 0) ty -= lf*0.8;
+    c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', tx, ty);
+  }
+  c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText('N', cx, cy - R - 3*d); c.textAlign = 'left'; c.textBaseline = 'middle';
+
+  c.fillStyle = '#f4ffd0'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 12*d;
+  c.beginPath(); c.arc(cx,cy,5*d,0,6.2832); c.fill(); c.shadowBlur = 0;
+
+  const kmx = 111.32*Math.cos(cfg.lat*Math.PI/180), kmy = 110.57, now = Date.now();
+  const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
+  radarHits = [];
+  for (const p of planes){
+    let x = (p.lon-cfg.lon)*kmx, y = (p.lat-cfg.lat)*kmy;
+    const tr = (p.track || 0) * Math.PI/180, v = (p.gs||0)*1.852/3600 * Math.min(30, (now-(p._t||now))/1000);
+    x += Math.sin(tr)*v; y += Math.cos(tr)*v;
+    const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
+    if (Math.hypot(px-cx,py-cy) > R + s) continue;
+
+    const dk = Math.hypot(x,y);
+    const altKm = (typeof p.alt_baro === 'number' && p.alt_baro > 300) ? p.alt_baro * 0.0003048 : null;
+    const zAngle = altKm ? Math.atan2(dk, altKm) * 180 / Math.PI : 90;
+    const isPicked = pickedHex && Date.now() < pickedUntil && p.hex === pickedHex;
+    const inAlert = (cfg.notifEnabled && zAngle <= cfg.notifAngle) || isPicked;
+
+    if (inAlert){
+      c.strokeStyle = 'rgba(255, 190, 60, 0.9)';
+      c.lineWidth = 1.6*d;
+      c.beginPath(); c.arc(px, py, s*1.85, 0, 6.2832); c.stroke();
+    }
+
+    c.save(); c.translate(px,py); c.rotate(tr);
+    c.fillStyle = inAlert ? '#ffbe3c' : '#d6ff3a';
+    c.shadowColor = inAlert ? '#ffbe3c' : '#d6ff3a';
+    c.shadowBlur = 10*d;
+    c.beginPath(); PLANE.forEach(([a,b],i) => i ? c.lineTo(a*s,b*s) : c.moveTo(a*s,b*s)); c.closePath(); c.fill();
+    c.restore(); c.shadowBlur = 0;
+
+    const cs = (p.flight || p.hex || '?').trim(), infos = [radarInfoText(p, cs, dk, cfg.radarInfo1), radarInfoText(p, cs, dk, cfg.radarInfo2)].filter(Boolean);
+    const followed = cfg.follow && cs === cfg.follow;
+    c.font = mono(fs); c.fillStyle = inAlert ? '#ffcf6e' : (followed ? '#ffffff' : '#e8ffe0');
+    c.shadowColor = '#000'; c.shadowBlur = 4*d;
+    const lx = px + s*1.4, ly = py - fs*0.15; c.fillText(cs, lx, ly);
+    if (infos.length){ c.font = mono(fs*0.75); c.fillStyle = inAlert ? 'rgba(255, 207, 110, 0.92)' : `rgba(${GL},.95)`; infos.forEach((t,i) => c.fillText(t, lx, ly + fs*(0.95 + i*0.85))); } c.shadowBlur = 0;
+    c.font = mono(fs);
+    radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*(1.1 + infos.length*0.85) });
+  }
+
+  const hudX = Math.max(14, safe.left + 12) * d;
+  const hudY = Math.max(12, safe.top + 8) * d;
+  c.font = mono(Math.max(11*d, R*0.028)); c.fillStyle = `rgba(${GL},.75)`; c.textAlign = 'left'; c.textBaseline = 'top';
+  const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
+  c.fillText(hud, hudX, hudY);
+  if (cfg.showMap){
+    c.font = mono(Math.max(9*d, R*0.02)); c.fillStyle = 'rgba(90,255,130,.45)'; c.textAlign = 'right'; c.textBaseline = 'bottom';
+    c.fillText('© Esri · © OpenStreetMap', W - Math.max(10, safe.right + 10)*d, H - Math.max(8, safe.bottom + 6)*d);
+    c.textAlign = 'left';
+  }
+  c.textBaseline = 'alphabetic';
+}
+
+function radarClick(e){
+  const d = window.devicePixelRatio || 1, x = e.offsetX*d, y = e.offsetY*d;
+  let best = null, bd = 1e9;
+  for (const h of radarHits){
+    const inLabel = x >= h.lx && x <= h.lx+h.lw && y >= h.ly && y <= h.ly+h.lh;
+    const dd = inLabel ? 0 : Math.hypot(x-h.x, y-h.y);
+    if (dd < h.r && dd < bd){ best = h; bd = dd; }
+  }
+  hideRadar();
+  if (best){
+    pickedHex = best.hex; pickedUntil = Date.now() + 120000;
+    if (pinned()) followMode = 'normal';
+    const q = planes.find(a => a.hex === best.hex); if (q) fetchRoute(q);
+    render();
+  }
+}
+let radarClickT = null;
+rcv.addEventListener('click', e => { const pt = { offsetX:e.offsetX, offsetY:e.offsetY }; clearTimeout(radarClickT); radarClickT = setTimeout(() => radarClick(pt), 280); });
+rcv.addEventListener('dblclick', () => { clearTimeout(radarClickT); toggleFS(); });
+
+let idleT;
+function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (!$('settings').classList.contains('open')) document.body.classList.add('idle'); }, 3000); }
+['mousemove','mousedown','touchstart','keydown'].forEach(ev => addEventListener(ev, wake, { passive:true }));
+wake();
+
+async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
+
+/* ============ Démarrage & Synchronisation automatique ============ */
+const qp = new URLSearchParams(location.search);
+if (qp.get('hex')) {
+  pickedHex = qp.get('hex');
+  pickedUntil = Date.now() + 120000;
+}
+if (qp.get('view') === 'radar') {
+  showRadar();
+  addEventListener('pageshow', sizeRadar, { once: true });
+}
+
+show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
+start();
+
+function syncNow(force = false){
+  pullRemoteConfig(cfg.ntfyTopic, force)
+    .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
+    .catch(() => {});
+}
+
+const syncParam = cleanTopic(qp.get('sync'));
+if (syncParam.length >= 4) {
+  cfg.ntfyTopic = syncParam;
+  saveCfg();
+  syncNow(true);
+} else {
+  syncNow(false);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    keepAwake();
+    syncNow(false);
+  }
+});
+keepAwake();
+</script>
+</body>
+</html>
