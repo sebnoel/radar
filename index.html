@@ -17,6 +17,7 @@
   #gear { position:fixed; top:max(8px, env(safe-area-inset-top)); right:10px; z-index:5; background:none; border:0; color:#fff; opacity:.18; font-size:26px; padding:8px; cursor:pointer; }
   #gear:hover,#gear:focus { opacity:.8; }
 
+  #radar { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:3; background:#010805; cursor:pointer; }
   #dock { position:fixed; left:50%; transform:translateX(-50%); bottom:max(10px, env(safe-area-inset-bottom)); z-index:5; display:none; gap:10px; }
   #dock button { font:13px system-ui,sans-serif; color:#cfd6e6; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 16px; opacity:.3; cursor:pointer; letter-spacing:.02em; }
   #dock button.on { opacity:.75; border-color:rgba(255,255,255,.45); }
@@ -37,6 +38,7 @@
 <body>
 
 <canvas id="led"></canvas>
+<canvas id="radar"></canvas>
 <div id="dock">
   <button id="bNormal" type="button">Normal</button>
   <button id="bFollow" type="button"></button>
@@ -242,7 +244,7 @@ async function fetchPlanes(){
     const u = `https://opensky-network.org/api/states/all?lamin=${cfg.lat-dLat}&lamax=${cfg.lat+dLat}&lomin=${cfg.lon-dLon}&lomax=${cfg.lon+dLon}`;
     const j = await getJSON(u); lastSource = 'opensky';
     return (j.states||[]).filter(x=>!x[8]).map(x=>({ flight:(x[1]||'').trim(), hex:x[0], lon:x[5], lat:x[6],
-      alt_baro: x[7]!=null ? x[7]*3.281 : null, gs: x[9]!=null ? x[9]*1.944 : 0, t:'' }));
+      alt_baro: x[7]!=null ? x[7]*3.281 : null, gs: x[9]!=null ? x[9]*1.944 : 0, track: x[10] ?? 0, t:'' }));
   } catch(e){ errs.push('opensky: '+e.message); }
   throw new Error(errs.join(' | '));
 }
@@ -251,8 +253,8 @@ function demoPlanes(){
   lastSource = 'demo';
   const t = Date.now()/1000, r = cfg.radius;
   return [
-    { flight:'UAL2186', t:'B737', lat:cfg.lat+(r*0.0045)*Math.sin(t/60), lon:cfg.lon+(r*0.004)*Math.cos(t/60), alt_baro:34000, gs:440 },
-    { flight:'AFR1234', t:'A320', lat:cfg.lat-(r*0.003), lon:cfg.lon+(r*0.002), alt_baro:12500, gs:310 }
+    { flight:'UAL2186', hex:'demo1', track:((Math.atan2(-Math.sin(t/60)*0.0026, Math.cos(t/60)*0.0045)*180/Math.PI)+360)%360, t:'B737', lat:cfg.lat+(r*0.0045)*Math.sin(t/60), lon:cfg.lon+(r*0.004)*Math.cos(t/60), alt_baro:34000, gs:440 },
+    { flight:'AFR1234', hex:'demo2', track:90, t:'A320', lat:cfg.lat-(r*0.003), lon:cfg.lon+(r*0.002), alt_baro:12500, gs:310 }
   ];
 }
 
@@ -380,6 +382,10 @@ function render(){
     else show({ l1:'Following', l2:cfg.follow, l4:'Searching...', l5l:'Not in the air yet' });
     return;
   }
+  if (pickedHex && Date.now() < pickedUntil){                 // avion choisi sur le radar (2 min)
+    const q = planes.find(a => a.hex === pickedHex);
+    if (q){ showPlane(q); return; }
+  }
   if(!planes.length){
     show({ l1:'Radar', l2:'No aircraft', l4:`Radius ${cfg.radius}km`, l5l:`Src ${lastSource}`, l6:`Every ${cfg.refresh}s` });
     return;
@@ -392,7 +398,7 @@ async function tick(){
   try {
     const ac = await fetchPlanes();
     planes = ac.filter(a => typeof a.lat==='number' && typeof a.lon==='number')
-               .map(a => Object.assign(a, { _d: km(cfg.lat,cfg.lon,a.lat,a.lon) }))
+               .map(a => Object.assign(a, { _d: km(cfg.lat,cfg.lon,a.lat,a.lon), _t: Date.now() }))
                .filter(a => a._d <= cfg.radius)
                .sort((a,b) => a._d - b._d);
     planes.slice(0,3).forEach(fetchRoute);
@@ -439,8 +445,102 @@ function toggleFS(){
   if (document.fullscreenElement || document.webkitFullscreenElement){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
   else { (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); }
 }
-cvs.addEventListener('dblclick', toggleFS);
+let clickT = null;                                              // clic = vue radar, double-clic = plein écran
+cvs.addEventListener('click', () => { clearTimeout(clickT); clickT = setTimeout(showRadar, 280); });
+cvs.addEventListener('dblclick', () => { clearTimeout(clickT); toggleFS(); });
+addEventListener('keydown', e => { if (e.key === 'Escape') hideRadar(); });
 addEventListener('keydown', e => { if ((e.key==='f' || e.key==='F') && !/INPUT/.test(document.activeElement.tagName)) toggleFS(); });
+
+/* ============ Vue radar ============ */
+const rcv = $('radar'), rctx = rcv.getContext('2d');
+let view = 'led', radarHits = [], pickedHex = '', pickedUntil = 0;
+function sizeRadar(){ const d = window.devicePixelRatio || 1; rcv.width = Math.round(innerWidth*d); rcv.height = Math.round(innerHeight*d); }
+function showRadar(){ view = 'radar'; rcv.style.display = 'block'; sizeRadar(); requestAnimationFrame(radarLoop); }
+function hideRadar(){ view = 'led'; rcv.style.display = 'none'; }
+addEventListener('resize', () => { if (view === 'radar') sizeRadar(); });
+function radarLoop(t){ if (view !== 'radar') return; drawRadar(t); requestAnimationFrame(radarLoop); }
+
+const PLANE = [[0,-1],[.12,-.55],[.95,.05],[.95,.22],[.12,0],[.1,.65],[.4,.85],[.4,.98],[0,.88],[-.4,.98],[-.4,.85],[-.1,.65],[-.12,0],[-.95,.22],[-.95,.05],[-.12,-.55]];
+const GL = '90,255,130';
+
+function drawRadar(t){
+  const c = rctx, d = window.devicePixelRatio || 1, W = rcv.width, H = rcv.height;
+  c.setTransform(1,0,0,1,0,0);
+  c.fillStyle = '#010805'; c.fillRect(0,0,W,H);
+  const cx = W/2, cy = H/2, R = Math.min(W,H)/2 - 16*d;
+  const mono = px => `600 ${px}px ui-monospace, Menlo, Consolas, monospace`;
+
+  // fond vert du disque
+  const g = c.createRadialGradient(cx,cy,0,cx,cy,R); g.addColorStop(0,'#0d4a20'); g.addColorStop(1,'#04200d');
+  c.fillStyle = g; c.beginPath(); c.arc(cx,cy,R,0,6.2832); c.fill();
+
+  // balayage
+  if (c.createConicGradient){
+    const a = (t/4500 % 1) * 6.2832, cg = c.createConicGradient(a, cx, cy);
+    cg.addColorStop(0, `rgba(${GL},0)`); cg.addColorStop(.88, `rgba(${GL},0)`); cg.addColorStop(1, `rgba(${GL},.38)`);
+    c.fillStyle = cg; c.beginPath(); c.arc(cx,cy,R,0,6.2832); c.fill();
+  }
+
+  // cercles de distance + axes
+  c.strokeStyle = `rgba(${GL},.6)`; c.lineWidth = 1.5*d;
+  for (let k=1;k<=4;k++){ c.beginPath(); c.arc(cx,cy,R*k/4,0,6.2832); c.stroke(); }
+  c.beginPath(); c.moveTo(cx-R,cy); c.lineTo(cx+R,cy); c.moveTo(cx,cy-R); c.lineTo(cx,cy+R); c.stroke();
+  const lf = Math.max(10*d, R*0.03); c.font = mono(lf); c.fillStyle = `rgba(${GL},.85)`; c.textBaseline = 'middle';
+  for (let k=1;k<=4;k++){ const v = cfg.radius*k/4, r = R*k/4;
+    c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', cx + r*0.707 + 4*d, cy - r*0.707); }
+  c.textAlign = 'center'; c.fillText('N', cx, cy - R - 0*d + lf*0.1 + 0); c.textAlign = 'left';
+
+  // moi, au centre
+  c.fillStyle = '#f4ffd0'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 12*d;
+  c.beginPath(); c.arc(cx,cy,5*d,0,6.2832); c.fill(); c.shadowBlur = 0;
+
+  // avions
+  const kmx = 111.32*Math.cos(cfg.lat*Math.PI/180), kmy = 110.57, now = Date.now();
+  const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
+  radarHits = [];
+  for (const p of planes){
+    let x = (p.lon-cfg.lon)*kmx, y = (p.lat-cfg.lat)*kmy;
+    const tr = (p.track || 0) * Math.PI/180, v = (p.gs||0)*1.852/3600 * Math.min(30, (now-(p._t||now))/1000);
+    x += Math.sin(tr)*v; y += Math.cos(tr)*v;                       // extrapolation entre deux relevés
+    const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
+    if (Math.hypot(px-cx,py-cy) > R + s) continue;
+
+    c.save(); c.translate(px,py); c.rotate(tr);                     // icône orientée selon le cap réel
+    c.fillStyle = '#d6ff3a'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 10*d;
+    c.beginPath(); PLANE.forEach(([a,b],i) => i ? c.lineTo(a*s,b*s) : c.moveTo(a*s,b*s)); c.closePath(); c.fill();
+    c.restore(); c.shadowBlur = 0;
+
+    const cs = (p.flight || p.hex || '?').trim(), alt = typeof p.alt_baro === 'number' ? 'FL' + String(Math.round(p.alt_baro/100)).padStart(3,'0') : 'GND';
+    const followed = cfg.follow && cs === cfg.follow;
+    c.font = mono(fs); c.fillStyle = followed ? '#ffffff' : '#e8ffe0';
+    c.shadowColor = '#000'; c.shadowBlur = 4*d;
+    const lx = px + s*1.4, ly = py - fs*0.15; c.fillText(cs, lx, ly);
+    c.font = mono(fs*0.75); c.fillStyle = `rgba(${GL},.95)`; c.fillText(alt, lx, ly + fs*0.95); c.shadowBlur = 0;
+    c.font = mono(fs);
+    radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*2 });
+  }
+
+  c.font = mono(Math.max(11*d, R*0.028)); c.fillStyle = `rgba(${GL},.7)`; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText(`${planes.length} aircraft · ${cfg.radius} km`, 14*d, 14*d);
+  c.textBaseline = 'alphabetic';
+}
+
+rcv.addEventListener('click', e => {                              // clic sur un avion : retour à l'écran, centré sur lui
+  const d = window.devicePixelRatio || 1, x = e.offsetX*d, y = e.offsetY*d;
+  let best = null, bd = 1e9;
+  for (const h of radarHits){
+    const inLabel = x >= h.lx && x <= h.lx+h.lw && y >= h.ly && y <= h.ly+h.lh;
+    const dd = inLabel ? 0 : Math.hypot(x-h.x, y-h.y);
+    if (dd < h.r && dd < bd){ best = h; bd = dd; }
+  }
+  hideRadar();
+  if (best){
+    pickedHex = best.hex; pickedUntil = Date.now() + 120000;
+    if (pinned()) followMode = 'normal';
+    const q = planes.find(a => a.hex === best.hex); if (q) fetchRoute(q);
+    render();
+  }
+});
 
 /* Curseur de souris : masqué après 3 s sans mouvement */
 let idleT;
