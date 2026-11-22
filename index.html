@@ -85,6 +85,18 @@
         <option value="none">Aucune</option>
       </select>
     </label>
+    <label>Position des échelles de distance (radar)
+      <select id="scaleDir">
+        <option value="0">Nord</option>
+        <option value="45">Nord-Est</option>
+        <option value="90">Est</option>
+        <option value="135">Sud-Est</option>
+        <option value="180">Sud</option>
+        <option value="225">Sud-Ouest</option>
+        <option value="270">Ouest</option>
+        <option value="315">Nord-Ouest</option>
+      </select>
+    </label>
     <label>Vol à suivre (indicatif, ex. AFR37LF)
       <input id="follow" type="text" placeholder="vide = aucun" autocapitalize="characters" autocomplete="off" spellcheck="false">
     </label>
@@ -228,7 +240,7 @@ function paint(){
 addEventListener('resize', paint);
 
 /* ============ Données de vol ============ */
-const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev', follow:'', radarInfo1:'route', radarInfo2:'vrate' };
+const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev', follow:'', radarInfo1:'route', radarInfo2:'vrate', scaleDir:45 };
 let cfg = Object.assign({}, DEFAULTS);
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } catch(e){}
 cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
@@ -236,6 +248,7 @@ if (!cfg.proxy) cfg.proxy = DEFAULTS.proxy;
 const INFO_KEYS = ['alt','route','speed','type','dist','track','vrate','none'];
 if (!INFO_KEYS.includes(cfg.radarInfo1)) cfg.radarInfo1 = DEFAULTS.radarInfo1;
 if (!INFO_KEYS.includes(cfg.radarInfo2)) cfg.radarInfo2 = DEFAULTS.radarInfo2;
+cfg.scaleDir = +cfg.scaleDir; if (!(cfg.scaleDir >= 0 && cfg.scaleDir < 360 && cfg.scaleDir % 45 === 0)) cfg.scaleDir = DEFAULTS.scaleDir;
 delete cfg.radarInfo;   // ancien réglage à une seule info
 
 const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Air', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas', OCN:'Discover', EWG:'Eurowings', CFG:'Condor', TOM:'TUI', TUI:'TUI', EXS:'Jet2', BCS:'DHL (EAT)', GEC:'Lufthansa Cargo', CLX:'Cargolux', MSR:'EgyptAir', RAM:'Royal Air Maroc', DAH:'Air Algerie', TAR:'Tunisair', AEE:'Aegean', LOT:'LOT Polish', CSA:'Czech Airlines', BTI:'airBaltic', HOP:'Air France Hop', AEA:'Air Europa', VOE:'Volotea', EZS:'easyJet CH', TRA:'Transavia', SXS:'SunExpress', PGT:'Pegasus', EJU:'easyJet' };
@@ -447,11 +460,11 @@ function start(){
 }
 
 /* Paramètres */
-function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('follow').value=cfg.follow||''; $('radarInfo1').value=cfg.radarInfo1; $('radarInfo2').value=cfg.radarInfo2; $('settings').classList.add('open'); }
+function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('follow').value=cfg.follow||''; $('radarInfo1').value=cfg.radarInfo1; $('radarInfo2').value=cfg.radarInfo2; $('scaleDir').value=String(cfg.scaleDir); $('settings').classList.add('open'); }
 $('gear').onclick = openSettings;
 $('close').onclick = () => $('settings').classList.remove('open');
 $('save').onclick = () => {
-  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,''), follow:$('follow').value.trim().toUpperCase().replace(/\s+/g,''), radarInfo1:$('radarInfo1').value, radarInfo2:$('radarInfo2').value };
+  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,''), follow:$('follow').value.trim().toUpperCase().replace(/\s+/g,''), radarInfo1:$('radarInfo1').value, radarInfo2:$('radarInfo2').value, scaleDir:+$('scaleDir').value };
   saveCfg(); resetFollow();
   $('settings').classList.remove('open'); idx=0; start();
 };
@@ -527,8 +540,13 @@ function drawRadar(t){
   for (let k=1;k<=4;k++){ c.beginPath(); c.arc(cx,cy,R*k/4,0,6.2832); c.stroke(); }
   c.beginPath(); c.moveTo(cx-R,cy); c.lineTo(cx+R,cy); c.moveTo(cx,cy-R); c.lineTo(cx,cy+R); c.stroke();
   const lf = Math.max(10*d, R*0.03); c.font = mono(lf); c.fillStyle = `rgba(${GL},.85)`; c.textBaseline = 'middle';
+  const sa = cfg.scaleDir * Math.PI/180, sdx = Math.round(Math.sin(sa)*1000)/1000, sdy = -Math.round(Math.cos(sa)*1000)/1000;
   for (let k=1;k<=4;k++){ const v = cfg.radius*k/4, r = R*k/4;
-    c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', cx + r*0.707 + 4*d, cy - r*0.707); }
+    let tx = cx + r*sdx, ty = cy + r*sdy;
+    if (sdx > 0.1){ c.textAlign = 'left'; tx += 4*d; } else if (sdx < -0.1){ c.textAlign = 'right'; tx -= 4*d; } else { c.textAlign = 'left'; tx += lf*1.2; }
+    if (sdy === 0) ty -= lf*0.8;                                    // sur l'axe E/O : texte au-dessus du trait
+    c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', tx, ty); }
+  c.textAlign = 'left';
   c.textAlign = 'center'; c.fillText('N', cx, cy - R - 0*d + lf*0.1 + 0); c.textAlign = 'left';
 
   // moi, au centre
