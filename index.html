@@ -320,7 +320,7 @@ async function fetchRoute(p){
   routeTry[cs] = Date.now();
   const base = cfg.proxy || 'https://api.adsb.lol';
   const num = v => typeof v === 'number' && isFinite(v);
-  let code = null, ap = null;                      // ap = [{lat,lon}, ...] du départ à l'arrivée
+  let code = null, ap = null, cityO = '', cityD = '';   // ap = [{lat,lon}, ...] du départ à l'arrivée ; cityO/cityD = villes
   try {                                            // 1) adsb.lol : GET /api/0/route/{indicatif}/{lat}/{lon}
     let j = await getJSON(`${base}/api/0/route/${encodeURIComponent(cs)}/${p.lat}/${p.lon}`);
     if (Array.isArray(j)) j = j[0];
@@ -328,6 +328,7 @@ async function fetchRoute(p){
       const list = j._airports || [];
       code = j._airport_codes_iata || list.map(a=>a.iata).filter(Boolean).join('-') || null;
       ap = list.filter(a => a && num(a.lat) && num(a.lon));
+      if (list.length >= 2){ cityO = list[0].location || ''; cityD = list[list.length-1].location || ''; }
     }
   } catch(e){}
   if ((!code || code==='unknown' || !ap || ap.length < 2) && cfg.proxy){     // 2) secours / compléments : adsbdb
@@ -338,14 +339,16 @@ async function fetchRoute(p){
         const code2 = f.origin.iata_code + '-' + f.destination.iata_code;
         const ap2 = (num(f.origin.latitude) && num(f.destination.latitude))
           ? [{lat:f.origin.latitude, lon:f.origin.longitude}, {lat:f.destination.latitude, lon:f.destination.longitude}] : null;
-        if (!code || code==='unknown'){ code = code2; ap = ap2; }
-        else if ((!ap || ap.length < 2) && code === code2) ap = ap2;
+        const mO = f.origin.municipality || '', mD = f.destination.municipality || '';
+        if (!code || code==='unknown'){ code = code2; ap = ap2; cityO = mO; cityD = mD; }
+        else if (code === code2){ if (!ap || ap.length < 2) ap = ap2; cityO = cityO || mO; cityD = cityD || mD; }
       }
     } catch(e){}
   }
   if (code && code !== 'unknown' && code.includes('-')){
     const parts = code.split('-'), ok = ap && ap.length >= 2;
-    routeCache[cs] = { text: `${parts[0]} -> ${parts[parts.length-1]}`,
+    const oN = cityO || parts[0], dN = cityD || parts[parts.length-1], codeTxt = `${parts[0]} -> ${parts[parts.length-1]}`, cityTxt = `${oN} -> ${dN}`;
+    routeCache[cs] = { text: codeTxt, city: cityTxt, led: clean(cityTxt).length <= 14 ? cityTxt : codeTxt,
                        orig: ok ? {lat:ap[0].lat, lon:ap[0].lon} : null,
                        dest: ok ? {lat:ap[ap.length-1].lat, lon:ap[ap.length-1].lon} : null };
     render();
@@ -425,7 +428,7 @@ function showPlane(p){
     if (gs > 30) eta = hhmm(new Date(Date.now() + rem/(gs*1.852)*3600000));
     if (rt.orig){ const tot = km(rt.orig.lat, rt.orig.lon, rt.dest.lat, rt.dest.lon); if (tot > 20) bar = Math.min(1, Math.max(0.03, 1 - rem/tot)); }
   }
-  show({ logo:icao, l1:airline, l2:cs, l3:rt?.text || '---', l4:type,
+  show({ logo:icao, l1:airline, l2:cs, l3:rt?.led || '---', l4:type,
          l5l:altTxt, l5r:`ETA ${eta}`, l6:toGo, bar });
 }
 
@@ -555,7 +558,7 @@ const GL = '90,255,130';
 
 function radarInfoText(p, cs, distKm, kind){
   switch (kind){
-    case 'route': return routeCache[cs]?.text.replace(' -> ', ' → ') || '---';
+    case 'route': return (routeCache[cs]?.city || '').replace(' -> ', ' → ') || '---';
     case 'speed': return p.gs ? Math.round(p.gs) + ' kt' : '-- kt';
     case 'type':  return p.t || '--';
     case 'dist':  return (distKm >= 100 ? Math.round(distKm) : distKm.toFixed(1)) + ' km';
