@@ -3,29 +3,35 @@
 <head>
 <meta charset="utf-8">
 <title>Flight Display</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+  }
   * { box-sizing:border-box; margin:0; }
-  html,body { height:100%; background:#000; overflow:hidden; }
+  html,body { width:100%; height:100%; height:100dvh; background:#000; overflow:hidden; touch-action:manipulation; }
   body { display:flex; align-items:center; justify-content:center; }
   #led { display:block; background:#05060a; image-rendering:pixelated; }
 
   body.idle, body.idle * { cursor:none !important; }
-  #gear { position:fixed; top:max(8px, env(safe-area-inset-top)); right:10px; z-index:5; background:none; border:0; color:#fff; opacity:.18; font-size:26px; padding:8px; cursor:pointer; }
-  #gear:hover,#gear:focus { opacity:.8; }
+  #gear { position:fixed; top:max(10px, calc(var(--sat) + 4px)); right:max(12px, calc(var(--sar) + 8px)); z-index:5; background:none; border:0; color:#fff; opacity:.35; font-size:24px; padding:8px; line-height:1; cursor:pointer; }
+  #gear:hover,#gear:focus { opacity:.85; }
 
   #radar { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:3; background:#010805; cursor:pointer; }
-  #dock { position:fixed; left:50%; transform:translateX(-50%); bottom:max(10px, env(safe-area-inset-bottom)); z-index:5; display:none; gap:10px; }
+  #dock { position:fixed; left:50%; transform:translateX(-50%); bottom:max(10px, var(--sab)); z-index:5; display:none; gap:10px; }
   #dock button { font:13px system-ui,sans-serif; color:#cfd6e6; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 16px; opacity:.3; cursor:pointer; letter-spacing:.02em; }
   #dock button.on { opacity:.75; border-color:rgba(255,255,255,.45); }
   #dock button:hover, #dock button:focus-visible { opacity:1; }
 
-  #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.92); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; }
+  #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.92); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; padding:max(12px, var(--sat)) 12px max(12px, var(--sab)); }
   #settings.open { display:flex; }
-  #card { background:#12151c; color:#e8ecf5; padding:20px; border-radius:14px; width:min(92vw,410px); max-height:94vh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
+  #card { background:#12151c; color:#e8ecf5; padding:20px; border-radius:14px; width:min(92vw,410px); max-height:92dvh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
 
   .modal-head { display:flex; align-items:center; justify-content:space-between; }
   .modal-head h2 { font-size:18px; font-weight:600; }
@@ -38,7 +44,7 @@
 
   .tab-panel { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
   #card label { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; font-size:13px; color:#a9b2c7; min-width:0; }
-  #card input, #card select { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:15px; }
+  #card input, #card select { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
   #card .row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; min-width:0; }
   #card button { border:0; border-radius:8px; padding:11px; font-size:15px; cursor:pointer; background:#2a3040; color:#fff; }
   #card button.p { background:#1c4fd6; width:100%; font-weight:500; }
@@ -61,7 +67,7 @@
   #card label.chk input[type="checkbox"] { width:18px; height:18px; accent-color:#1c4fd6; cursor:pointer; flex:none; }
   #notifDetails { display:grid; gap:12px; }
   .sync-box { background:#0a0c11; border:1px solid #222736; border-radius:9px; padding:11px; display:grid; gap:10px; }
-  .sync-box input { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; color:#9fc0ff; }
+  .sync-box input { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:15px; color:#9fc0ff; }
   .ntfy-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .btn-ntfy { display:flex; align-items:center; justify-content:center; background:#182238; border:1px solid #2b3f6b; color:#b7ceff; border-radius:8px; padding:10px 8px; font-size:13px; font-weight:500; text-decoration:none; text-align:center; }
   .btn-ntfy:hover { background:#1f2d4a; }
@@ -231,6 +237,16 @@
 const $ = id => document.getElementById(id);
 const RELAY_URL = (new URLSearchParams(location.search).get('proxy') || 'https://radar-relay.sebnoel.workers.dev').replace(/\/$/, '');
 
+function getSafeInsets(){
+  const s = getComputedStyle(document.documentElement);
+  return {
+    top: parseFloat(s.getPropertyValue('--sat')) || 0,
+    bottom: parseFloat(s.getPropertyValue('--sab')) || 0,
+    left: parseFloat(s.getPropertyValue('--sal')) || 0,
+    right: parseFloat(s.getPropertyValue('--sar')) || 0
+  };
+}
+
 /* ============ Matrice de LEDs : 128 x 72 points ============ */
 const W = 128, H = 72;
 const fb = new Uint8Array(W*H*3);
@@ -331,7 +347,10 @@ const lit = document.createElement('canvas');
 function paint(){
   compose();
   const dpr = window.devicePixelRatio || 1;
-  const p = Math.max(3, Math.floor(Math.min(innerWidth/W, innerHeight/H) * dpr));
+  const safe = getSafeInsets();
+  const availW = Math.max(120, document.documentElement.clientWidth - safe.left - safe.right);
+  const availH = Math.max(80, document.documentElement.clientHeight - safe.top - safe.bottom);
+  const p = Math.max(2, Math.floor(Math.min(availW/W, availH/H) * dpr));
   cvs.width = W*p; cvs.height = H*p;
   cvs.style.width = (W*p/dpr)+'px'; cvs.style.height = (H*p/dpr)+'px';
   lit.width = W*p; lit.height = H*p;
@@ -859,11 +878,29 @@ addEventListener('keydown', e => { if ((e.key==='f' || e.key==='F') && !/INPUT/.
 /* ============ Vue radar ============ */
 const rcv = $('radar'), rctx = rcv.getContext('2d');
 let view = 'led', radarHits = [], pickedHex = '', pickedUntil = 0;
-function sizeRadar(){ const d = window.devicePixelRatio || 1; rcv.width = Math.round(innerWidth*d); rcv.height = Math.round(innerHeight*d); }
+
+function sizeRadar(){
+  const d = window.devicePixelRatio || 1;
+  const rect = rcv.getBoundingClientRect();
+  const w = Math.round((rect.width || document.documentElement.clientWidth) * d);
+  const h = Math.round((rect.height || document.documentElement.clientHeight) * d);
+  if (rcv.width !== w || rcv.height !== h){
+    rcv.width = w;
+    rcv.height = h;
+  }
+}
 function showRadar(){ view = 'radar'; rcv.style.display = 'block'; sizeRadar(); requestAnimationFrame(radarLoop); }
 function hideRadar(){ view = 'led'; rcv.style.display = 'none'; }
+
 addEventListener('resize', () => { if (view === 'radar') sizeRadar(); });
-function radarLoop(t){ if (view !== 'radar') return; drawRadar(t); requestAnimationFrame(radarLoop); }
+if (window.visualViewport){
+  window.visualViewport.addEventListener('resize', () => { paint(); if (view === 'radar') sizeRadar(); });
+}
+if ('ResizeObserver' in window){
+  new ResizeObserver(() => { if (view === 'radar') sizeRadar(); }).observe(rcv);
+}
+
+function radarLoop(t){ if (view !== 'radar') return; sizeRadar(); drawRadar(t); requestAnimationFrame(radarLoop); }
 
 const PLANE = [[0,-1],[.12,-.55],[.95,.05],[.95,.22],[.12,0],[.1,.65],[.4,.85],[.4,.98],[0,.88],[-.4,.98],[-.4,.85],[-.1,.65],[-.12,0],[-.95,.22],[-.95,.05],[-.12,-.55]];
 const GL = '90,255,130';
@@ -916,9 +953,17 @@ function drawMap(c, cx, cy, R){
 
 function drawRadar(t){
   const c = rctx, d = window.devicePixelRatio || 1, W = rcv.width, H = rcv.height;
+  if (!W || !H) return;
+  const safe = getSafeInsets();
+  const topPad = (safe.top + 34) * d;
+  const botPad = (safe.bottom + 18) * d;
+  const sidePad = (Math.max(safe.left, safe.right) + 16) * d;
+
   c.setTransform(1,0,0,1,0,0);
   c.fillStyle = '#010805'; c.fillRect(0,0,W,H);
-  const cx = W/2, cy = H/2, R = Math.min(W,H)/2 - 16*d;
+  const cx = W/2;
+  const cy = topPad + (H - topPad - botPad)/2;
+  const R = Math.max(40*d, Math.min((W - 2*sidePad)/2, (H - topPad - botPad)/2));
   const mono = px => `600 ${px}px ui-monospace, Menlo, Consolas, monospace`;
 
   const g = c.createRadialGradient(cx,cy,0,cx,cy,R); g.addColorStop(0,'#0d4a20'); g.addColorStop(1,'#04200d');
@@ -979,127 +1024,12 @@ function drawRadar(t){
 
   const lf = Math.max(10*d, R*0.03); c.font = mono(lf); c.fillStyle = `rgba(${GL},.85)`; c.textBaseline = 'middle';
   const sa = cfg.scaleDir * Math.PI/180, sdx = Math.round(Math.sin(sa)*1000)/1000, sdy = -Math.round(Math.cos(sa)*1000)/1000;
-  for (let k=1;k<=4;k++){ const v = cfg.radius*k/4, r = R*k/4;
+  for (let k=1;k<=4;k++){
+    const v = cfg.radius*k/4, r = R*k/4;
     let tx = cx + r*sdx, ty = cy + r*sdy;
-    if (sdx > 0.1){ c.textAlign = 'left'; tx += 4*d; } else if (sdx < -0.1){ c.textAlign = 'right'; tx -= 4*d; } else { c.textAlign = 'left'; tx += lf*1.2; }
-    if (sdy === 0) ty -= lf*0.8;
-    c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', tx, ty); }
-  c.textAlign = 'left';
-  c.textAlign = 'center'; c.fillText('N', cx, cy - R + lf*0.1); c.textAlign = 'left';
-
-  c.fillStyle = '#f4ffd0'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 12*d;
-  c.beginPath(); c.arc(cx,cy,5*d,0,6.2832); c.fill(); c.shadowBlur = 0;
-
-  const kmx = 111.32*Math.cos(cfg.lat*Math.PI/180), kmy = 110.57, now = Date.now();
-  const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
-  radarHits = [];
-  for (const p of planes){
-    let x = (p.lon-cfg.lon)*kmx, y = (p.lat-cfg.lat)*kmy;
-    const tr = (p.track || 0) * Math.PI/180, v = (p.gs||0)*1.852/3600 * Math.min(30, (now-(p._t||now))/1000);
-    x += Math.sin(tr)*v; y += Math.cos(tr)*v;
-    const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
-    if (Math.hypot(px-cx,py-cy) > R + s) continue;
-
-    const dk = Math.hypot(x,y);
-    const altKm = (typeof p.alt_baro === 'number' && p.alt_baro > 300) ? p.alt_baro * 0.0003048 : null;
-    const zAngle = altKm ? Math.atan2(dk, altKm) * 180 / Math.PI : 90;
-    const isPicked = pickedHex && Date.now() < pickedUntil && p.hex === pickedHex;
-    const inAlert = (cfg.notifEnabled && zAngle <= cfg.notifAngle) || isPicked;
-
-    if (inAlert){
-      c.strokeStyle = 'rgba(255, 190, 60, 0.9)';
-      c.lineWidth = 1.6*d;
-      c.beginPath(); c.arc(px, py, s*1.85, 0, 6.2832); c.stroke();
-    }
-
-    c.save(); c.translate(px,py); c.rotate(tr);
-    c.fillStyle = inAlert ? '#ffbe3c' : '#d6ff3a';
-    c.shadowColor = inAlert ? '#ffbe3c' : '#d6ff3a';
-    c.shadowBlur = 10*d;
-    c.beginPath(); PLANE.forEach(([a,b],i) => i ? c.lineTo(a*s,b*s) : c.moveTo(a*s,b*s)); c.closePath(); c.fill();
-    c.restore(); c.shadowBlur = 0;
-
-    const cs = (p.flight || p.hex || '?').trim(), infos = [radarInfoText(p, cs, dk, cfg.radarInfo1), radarInfoText(p, cs, dk, cfg.radarInfo2)].filter(Boolean);
-    const followed = cfg.follow && cs === cfg.follow;
-    c.font = mono(fs); c.fillStyle = inAlert ? '#ffcf6e' : (followed ? '#ffffff' : '#e8ffe0');
-    c.shadowColor = '#000'; c.shadowBlur = 4*d;
-    const lx = px + s*1.4, ly = py - fs*0.15; c.fillText(cs, lx, ly);
-    if (infos.length){ c.font = mono(fs*0.75); c.fillStyle = inAlert ? 'rgba(255, 207, 110, 0.92)' : `rgba(${GL},.95)`; infos.forEach((t,i) => c.fillText(t, lx, ly + fs*(0.95 + i*0.85))); } c.shadowBlur = 0;
-    c.font = mono(fs);
-    radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*(1.1 + infos.length*0.85) });
-  }
-
-  c.font = mono(Math.max(11*d, R*0.028)); c.fillStyle = `rgba(${GL},.7)`; c.textAlign = 'left'; c.textBaseline = 'top';
-  const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
-  c.fillText(hud, 14*d, 14*d);
-  if (cfg.showMap){ c.font = mono(Math.max(9*d, R*0.02)); c.fillStyle = 'rgba(90,255,130,.45)'; c.textAlign = 'right'; c.textBaseline = 'bottom';
-    c.fillText('© Esri · © OpenStreetMap', W-10*d, H-8*d); c.textAlign = 'left'; }
-  c.textBaseline = 'alphabetic';
-}
-
-function radarClick(e){
-  const d = window.devicePixelRatio || 1, x = e.offsetX*d, y = e.offsetY*d;
-  let best = null, bd = 1e9;
-  for (const h of radarHits){
-    const inLabel = x >= h.lx && x <= h.lx+h.lw && y >= h.ly && y <= h.ly+h.lh;
-    const dd = inLabel ? 0 : Math.hypot(x-h.x, y-h.y);
-    if (dd < h.r && dd < bd){ best = h; bd = dd; }
-  }
-  hideRadar();
-  if (best){
-    pickedHex = best.hex; pickedUntil = Date.now() + 120000;
-    if (pinned()) followMode = 'normal';
-    const q = planes.find(a => a.hex === best.hex); if (q) fetchRoute(q);
-    render();
-  }
-}
-let radarClickT = null;
-rcv.addEventListener('click', e => { const pt = { offsetX:e.offsetX, offsetY:e.offsetY }; clearTimeout(radarClickT); radarClickT = setTimeout(() => radarClick(pt), 280); });
-rcv.addEventListener('dblclick', () => { clearTimeout(radarClickT); toggleFS(); });
-
-let idleT;
-function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => { if (!$('settings').classList.contains('open')) document.body.classList.add('idle'); }, 3000); }
-['mousemove','mousedown','touchstart','keydown'].forEach(ev => addEventListener(ev, wake, { passive:true }));
-wake();
-
-async function keepAwake(){ try { await navigator.wakeLock?.request('screen'); } catch(e){} }
-
-/* ============ Démarrage & Synchronisation automatique ============ */
-const qp = new URLSearchParams(location.search);
-if (qp.get('hex')) {
-  pickedHex = qp.get('hex');
-  pickedUntil = Date.now() + 120000;
-}
-if (qp.get('view') === 'radar') {
-  showRadar();
-  addEventListener('pageshow', sizeRadar, { once: true });
-}
-
-show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
-start();
-
-function syncNow(force = false){
-  pullRemoteConfig(cfg.ntfyTopic, force)
-    .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
-    .catch(() => {});
-}
-
-const syncParam = cleanTopic(qp.get('sync'));
-if (syncParam.length >= 4) {
-  cfg.ntfyTopic = syncParam;
-  saveCfg();
-  syncNow(true);
-} else {
-  syncNow(false);
-}
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    keepAwake();
-    syncNow(false);
-  }
-});
-keepAwake();
-</script>
-</body>
-</html>
+    if (k === 4 && sdx < -0.1){
+      c.textAlign = 'left'; tx += 4*d;
+      if (Math.abs(sdy) < 0.1) ty -= lf*0.85;
+    } else if (k === 4 && sdx > 0.1){
+      c.textAlign = 'right'; tx -= 4*d;
+      if
