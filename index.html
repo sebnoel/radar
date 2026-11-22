@@ -421,10 +421,17 @@ $('save').onclick = () => {
   saveCfg(); resetFollow();
   $('settings').classList.remove('open'); idx=0; start();
 };
-$('geo').onclick = () => navigator.geolocation?.getCurrentPosition(
-  pos => { $('lat').value = pos.coords.latitude.toFixed(4); $('lon').value = pos.coords.longitude.toFixed(4); },
-  () => status('Position refusée')
-);
+$('geo').onclick = () => {
+  if (!navigator.geolocation) return status('Géolocalisation non disponible sur cet appareil');
+  status('Recherche de la position…');
+  navigator.geolocation.getCurrentPosition(
+    pos => { $('lat').value = pos.coords.latitude.toFixed(4); $('lon').value = pos.coords.longitude.toFixed(4); status('Position trouvée : pensez à Enregistrer'); },
+    err => status(err.code === 1 ? 'Position refusée : autorisez-la pour ce site dans les réglages de l’appareil'
+                : err.code === 2 ? 'Position indisponible (service de localisation désactivé ?)'
+                : 'Délai dépassé, réessayez'),
+    { enableHighAccuracy:false, timeout:15000, maximumAge:600000 }
+  );
+};
 
 /* Plein écran : double-clic / double-toucher sur l'écran, ou touche F */
 function toggleFS(){
