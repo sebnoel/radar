@@ -75,7 +75,7 @@
   <div id="card">
     <h2>Paramètres</h2>
     <label>Rayon d’interception (km)
-      <input id="radius" type="number" min="1" max="450" step="1">
+      <input id="radius" type="number" min="1" max="200" step="1">
     </label>
     <label>Rafraîchissement (secondes)
       <input id="refresh" type="number" min="2" max="300" step="1">
@@ -84,6 +84,9 @@
       <label>Latitude <input id="lat" type="number" step="0.0001"></label>
       <label>Longitude <input id="lon" type="number" step="0.0001"></label>
     </div>
+    <label>Relais (optionnel, URL du Worker)
+      <input id="proxy" type="url" placeholder="https://xxx.workers.dev">
+    </label>
     <button id="geo" type="button">Utiliser ma position</button>
     <div class="row">
       <button id="close" type="button">Fermer</button>
@@ -97,6 +100,7 @@
 const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522 };
 let cfg = Object.assign({}, DEFAULTS);
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } catch(e){}
+cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
 
 const $ = id => document.getElementById(id);
 const AIRLINES = { UAL:'United', AAL:'American', DAL:'Delta', SWA:'Southwest', JBU:'JetBlue', ACA:'Air Canada', AFR:'Air France', BAW:'British Airways', DLH:'Lufthansa', KLM:'KLM', RYR:'Ryanair', EZY:'easyJet', UAE:'Emirates', IBE:'Iberia', VLG:'Vueling', TVF:'Transavia', SWR:'Swiss', SAS:'SAS', TAP:'TAP Portugal', FDX:'FedEx', UPS:'UPS', QTR:'Qatar', THY:'Turkish', ETD:'Etihad', AZA:'ITA Airways', AUA:'Austrian', BEL:'Brussels', FIN:'Finnair', EIN:'Aer Lingus', NAX:'Norwegian', WZZ:'Wizz Air', ELY:'El Al', SIA:'Singapore', CPA:'Cathay', ANA:'ANA', JAL:'JAL', KAL:'Korean Air', QFA:'Qantas' };
@@ -121,8 +125,9 @@ async function fetchPlanes(){
   if (new URLSearchParams(location.search).has('demo')) return demoPlanes();
   const nm = Math.min(250, Math.max(1, cfg.radius/1.852)).toFixed(1);
   const errs = [];
+  const base = cfg.proxy || 'https://api.adsb.lol';
   const sources = [
-    ['adsb.lol',      `https://api.adsb.lol/v2/point/${cfg.lat}/${cfg.lon}/${nm}`],
+    ['adsb.lol',      `${base}/v2/point/${cfg.lat}/${cfg.lon}/${nm}`],
     ['airplanes.live',`https://api.airplanes.live/v2/point/${cfg.lat}/${cfg.lon}/${nm}`]
   ];
   for (const [name,u] of sources){
@@ -154,7 +159,7 @@ async function fetchRoute(p){
   if(!cs || routeCache[cs] !== undefined) return;
   routeCache[cs] = null;
   try {
-    const j = await getJSON('https://api.adsb.lol/api/0/routeset', {
+    const j = await getJSON((cfg.proxy || 'https://api.adsb.lol') + '/api/0/routeset', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ planes:[{ callsign:cs, lat:p.lat, lng:p.lon }] })
     });
@@ -167,7 +172,7 @@ function showError(m){
   $('bar').style.transform='scaleX(0)';
   setText(['Network', 'Error', '', 'API unreachable', '', '', '']);
   $('l6').textContent = 'Tap gear for details';
-  $('l5').textContent = String(m).slice(0,40);
+  $('l5').textContent = String(m).replace(/Failed to fetch/g,'blocked').slice(0,60);
 }
 
 function render(){
@@ -208,11 +213,11 @@ function start(){
 }
 
 /* Paramètres */
-function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('settings').classList.add('open'); }
+function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('settings').classList.add('open'); }
 $('gear').onclick = openSettings;
 $('close').onclick = () => $('settings').classList.remove('open');
 $('save').onclick = () => {
-  cfg = { radius:+$('radius').value||DEFAULTS.radius, refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value };
+  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,'') };
   try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){}
   $('settings').classList.remove('open'); idx=0; start();
 };
