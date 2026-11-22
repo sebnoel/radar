@@ -16,6 +16,11 @@
   #gear { position:fixed; top:max(8px, env(safe-area-inset-top)); right:10px; z-index:5; background:none; border:0; color:#fff; opacity:.18; font-size:26px; padding:8px; cursor:pointer; }
   #gear:hover,#gear:focus { opacity:.8; }
 
+  #dock { position:fixed; left:50%; transform:translateX(-50%); bottom:max(10px, env(safe-area-inset-bottom)); z-index:5; display:none; gap:10px; }
+  #dock button { font:13px system-ui,sans-serif; color:#cfd6e6; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 16px; opacity:.3; cursor:pointer; letter-spacing:.02em; }
+  #dock button.on { opacity:.75; border-color:rgba(255,255,255,.45); }
+  #dock button:hover, #dock button:focus-visible { opacity:1; }
+
   #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.88); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; }
   #settings.open { display:flex; }
   #card { background:#12151c; color:#e8ecf5; padding:24px; border-radius:14px; width:min(92vw,400px); display:grid; gap:14px; margin:auto; }
@@ -31,6 +36,10 @@
 <body>
 
 <canvas id="led"></canvas>
+<div id="dock">
+  <button id="bNormal" type="button">Normal</button>
+  <button id="bFollow" type="button"></button>
+</div>
 <button id="gear" aria-label="Paramètres">⚙</button>
 
 <div id="settings">
@@ -48,6 +57,9 @@
     </div>
     <label>Relais (optionnel, URL du Worker)
       <input id="proxy" type="url" placeholder="https://radar-relay.sebnoel.workers.dev">
+    </label>
+    <label>Vol à suivre (indicatif, ex. AFR37LF)
+      <input id="follow" type="text" placeholder="vide = aucun" autocapitalize="characters" autocomplete="off" spellcheck="false">
     </label>
     <button id="geo" type="button">Utiliser ma position</button>
     <div class="row">
@@ -189,7 +201,7 @@ function paint(){
 addEventListener('resize', paint);
 
 /* ============ Données de vol ============ */
-const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev' };
+const DEFAULTS = { radius:30, refresh:10, lat:48.8566, lon:2.3522, proxy:'https://radar-relay.sebnoel.workers.dev', follow:'' };
 let cfg = Object.assign({}, DEFAULTS);
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('fd-cfg') || '{}')); } catch(e){}
 cfg.radius = Math.min(200, Math.max(1, +cfg.radius || 30));
@@ -275,12 +287,53 @@ function showError(m){
   show({ l1:'Network', l2:'Error', l4:'API unreachable', l5l:e[0]||'', l6:e[1]||'' });
 }
 
-function render(){
-  if(!planes.length){
-    show({ l1:'Radar', l2:'No aircraft', l4:`Radius ${cfg.radius}km`, l5l:`Src ${lastSource}`, l6:`Every ${cfg.refresh}s` });
-    return;
+/* ---- Suivi d'un vol ---- */
+let followMode = 'auto';           // auto : épinglé tant qu'il vole | normal : affichage normal forcé | follow : ce vol forcé
+let followPlane = null, followAirborne = false, followSeenAir = false, followLastSeen = 0, followLow = false;
+
+const pinned = () => !!cfg.follow && (followMode === 'follow' || (followMode === 'auto' && followAirborne));
+
+function saveCfg(){ try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){} }
+function resetFollow(){ followMode='auto'; followPlane=null; followAirborne=false; followSeenAir=false; followLastSeen=0; followLow=false; }
+
+function landed(){                                   // vol posé : on oublie le suivi, retour à l'affichage normal
+  cfg.follow = ''; saveCfg(); resetFollow(); render();
+}
+
+async function fetchFollow(){
+  const cs = cfg.follow; if (!cs) return;
+  let ac = null;
+  try {
+    const j = await getJSON(`${cfg.proxy || 'https://api.adsb.lol'}/v2/callsign/${encodeURIComponent(cs)}`);
+    ac = (j.ac || j.aircraft || []).find(a => typeof a.lat === 'number' && typeof a.lon === 'number') || null;
+  } catch(e){ return; }                               // erreur réseau : on garde l'état précédent
+  if (ac){
+    ac._d = km(cfg.lat, cfg.lon, ac.lat, ac.lon);
+    const onGround = ac.alt_baro === 'ground' || (typeof ac.alt_baro === 'number' && ac.alt_baro < 100 && (ac.gs||0) < 60);
+    followPlane = ac; followLastSeen = Date.now();
+    followAirborne = !onGround;
+    followLow = typeof ac.alt_baro === 'number' && ac.alt_baro < 4000;
+    if (!onGround) followSeenAir = true;
+    if (followSeenAir && onGround) { landed(); return; }
+    fetchRoute(ac);
+  } else {
+    followPlane = null; followAirborne = false;
+    if (followSeenAir && followLow && Date.now() - followLastSeen > 180000) landed();   // disparu près du sol
   }
-  const p = planes[idx % planes.length];
+}
+
+function updateButtons(){
+  $('dock').style.display = cfg.follow ? 'flex' : 'none';
+  if (!cfg.follow) return;
+  $('bFollow').textContent = cfg.follow;
+  const pin = pinned();
+  $('bFollow').classList.toggle('on', pin);
+  $('bNormal').classList.toggle('on', !pin);
+}
+$('bNormal').onclick = () => { followMode = 'normal'; render(); };
+$('bFollow').onclick = () => { followMode = 'follow'; render(); };
+
+function showPlane(p){
   const cs = (p.flight||p.hex||'').trim();
   const icao = /^[A-Z]{3}\d/.test(cs) ? cs.slice(0,3) : '';
   const airline = AIRLINES[icao] || (p.ownOp || 'Flight');
@@ -288,11 +341,27 @@ function render(){
   const d = p._d, gs = p.gs || 0;
   const eta = gs > 30 ? hhmm(new Date(Date.now() + d/(gs*1.852)*3600000)) : '--:--';
   const alt = typeof p.alt_baro === 'number' ? Math.round(p.alt_baro/100)*100 + 'ft' : 'ground';
+  const dist = d >= 100 ? Math.round(d) : d.toFixed(1);
   show({ logo:icao, l1:airline, l2:cs, l3:routeCache[cs] || '---', l4:type,
-         l5l:`Alt ${alt}`, l5r:`ETA ${eta}`, l6:`${d.toFixed(1)}km to go`, bar:Math.max(0.03, 1 - d/cfg.radius) });
+         l5l:`Alt ${alt}`, l5r:`ETA ${eta}`, l6:`${dist}km to go`, bar:Math.max(0.03, 1 - d/cfg.radius) });
+}
+
+function render(){
+  updateButtons();
+  if (pinned()){
+    if (followPlane) showPlane(followPlane);
+    else show({ l1:'Following', l2:cfg.follow, l4:'Searching...', l5l:'Not in the air yet' });
+    return;
+  }
+  if(!planes.length){
+    show({ l1:'Radar', l2:'No aircraft', l4:`Radius ${cfg.radius}km`, l5l:`Src ${lastSource}`, l6:`Every ${cfg.refresh}s` });
+    return;
+  }
+  showPlane(planes[idx % planes.length]);
 }
 
 async function tick(){
+  if (cfg.follow) await fetchFollow();
   try {
     const ac = await fetchPlanes();
     planes = ac.filter(a => typeof a.lat==='number' && typeof a.lon==='number')
@@ -301,7 +370,11 @@ async function tick(){
                .sort((a,b) => a._d - b._d);
     planes.slice(0,3).forEach(fetchRoute);
     status(`${planes.length} avion(s) • source ${lastSource} • ${hhmm(new Date())}`);
-  } catch(e){ planes = []; status('Erreur réseau : ' + e.message); console.error(e); showError(e.message); return; }
+  } catch(e){
+    planes = []; status('Erreur réseau : ' + e.message); console.error(e);
+    if (pinned()) render(); else { updateButtons(); showError(e.message); }
+    return;
+  }
   render();
 }
 
@@ -313,12 +386,12 @@ function start(){
 }
 
 /* Paramètres */
-function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('settings').classList.add('open'); }
+function openSettings(){ $('radius').value=cfg.radius; $('refresh').value=cfg.refresh; $('lat').value=cfg.lat; $('lon').value=cfg.lon; $('proxy').value=cfg.proxy||''; $('follow').value=cfg.follow||''; $('settings').classList.add('open'); }
 $('gear').onclick = openSettings;
 $('close').onclick = () => $('settings').classList.remove('open');
 $('save').onclick = () => {
-  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,'') };
-  try { localStorage.setItem('fd-cfg', JSON.stringify(cfg)); } catch(e){}
+  cfg = { radius:Math.min(200, Math.max(1, +$('radius').value||DEFAULTS.radius)), refresh:+$('refresh').value||DEFAULTS.refresh, lat:+$('lat').value, lon:+$('lon').value, proxy:$('proxy').value.trim().replace(/\/$/,''), follow:$('follow').value.trim().toUpperCase().replace(/\s+/g,'') };
+  saveCfg(); resetFollow();
   $('settings').classList.remove('open'); idx=0; start();
 };
 $('geo').onclick = () => navigator.geolocation?.getCurrentPosition(
