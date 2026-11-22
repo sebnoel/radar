@@ -1138,9 +1138,6 @@ if (qp.get('view') === 'radar') {
   addEventListener('pageshow', sizeRadar, { once: true });
 }
 
-show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
-start();
-
 function syncNow(force = false){
   pullRemoteConfig(cfg.ntfyTopic, force)
     .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
@@ -1151,8 +1148,20 @@ const syncParam = cleanTopic(qp.get('sync'));
 if (syncParam.length >= 4) {
   cfg.ntfyTopic = syncParam;
   saveCfg();
-  syncNow(true);
+  show({ l1:'Sync', l2:syncParam, l4:'Loading profile...' });
+  pullRemoteConfig(syncParam, true)
+    .then(() => {
+      resetFollow(); idx = 0; start();
+      const cleanUrl = location.pathname + (qp.get('view') === 'radar' ? '?view=radar' : '');
+      history.replaceState(null, '', cleanUrl);
+    })
+    .catch(e => {
+      show({ l1:'Sync Error', l2:syncParam, l4:e.message || 'Not found' });
+      setTimeout(() => start(), 2500);
+    });
 } else {
+  show({ l1:'Radar', l2:'Scanning', l4:'Waiting for data' });
+  start();
   syncNow(false);
 }
 
