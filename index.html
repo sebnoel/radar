@@ -25,35 +25,53 @@
 
   #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.92); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; }
   #settings.open { display:flex; }
-  #card { background:#12151c; color:#e8ecf5; padding:24px; border-radius:14px; width:min(92vw,420px); max-height:94vh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
-  #card h2 { font-size:18px; font-weight:600; }
-  #card label { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; font-size:14px; color:#a9b2c7; min-width:0; }
-  #card input, #card select { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:16px; }
+  #card { background:#12151c; color:#e8ecf5; padding:20px; border-radius:14px; width:min(92vw,410px); max-height:94vh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
+
+  .modal-head { display:flex; align-items:center; justify-content:space-between; }
+  .modal-head h2 { font-size:18px; font-weight:600; }
+  #card button.icon-close { background:none; color:#8f9bb3; font-size:20px; padding:4px 8px; line-height:1; }
+  #card button.icon-close:hover { color:#fff; }
+
+  .tabs { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; background:#0a0c11; padding:4px; border-radius:10px; border:1px solid #222736; }
+  #card button.tab { background:transparent; color:#8f9bb3; font-size:13px; font-weight:500; padding:8px 6px; border-radius:7px; transition:background .15s, color .15s; }
+  #card button.tab.on { background:#1e2433; color:#fff; }
+
+  .tab-panel { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+  #card label { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; font-size:13px; color:#a9b2c7; min-width:0; }
+  #card input, #card select { width:100%; min-width:0; background:#0a0c11; border:1px solid #2a3040; color:#fff; border-radius:8px; padding:10px; font-size:15px; }
   #card .row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; min-width:0; }
   #card button { border:0; border-radius:8px; padding:11px; font-size:15px; cursor:pointer; background:#2a3040; color:#fff; }
-  #card button.p { background:#1c4fd6; }
+  #card button.p { background:#1c4fd6; width:100%; font-weight:500; }
+  #card button.p:hover { background:#255be6; }
   #card [hidden] { display:none !important; }
+
+  .input-group { display:flex; gap:8px; align-items:stretch; }
+  .input-group input { flex:1; min-width:0; }
+  #card button#geo { flex:none; padding:0 14px; font-size:18px; background:#1e2433; border:1px solid #2a3040; }
+  #card button#geo:hover { background:#2a3247; }
+
   #cityResults { display:grid; gap:4px; margin-top:-6px; }
   #cityResults button { text-align:left; background:#0a0c11; border:1px solid #2a3040; font-size:14px; padding:9px 10px; }
   #cityResults .none { font-size:13px; color:#7d879c; padding:4px 2px; }
-  #card button#relayBtn { background:none; border:1px solid #2a3040; color:#a9b2c7; font-size:13px; padding:8px; }
 
-  /* Section dédiée aux notifications */
-  #card .notif-section { background:#0a0c11; border:1px solid #2a3040; border-radius:10px; padding:14px; display:grid; gap:12px; }
-  #card .notif-section h3 { font-size:15px; font-weight:600; color:#e8ecf5; }
-  #card label.chk { display:flex; align-items:center; gap:10px; font-size:14px; color:#e8ecf5; cursor:pointer; }
+  /* Onglet Alertes */
+  #card label.chk { display:flex; align-items:center; gap:10px; font-size:14px; color:#e8ecf5; cursor:pointer; background:#0a0c11; border:1px solid #2a3040; padding:11px 12px; border-radius:9px; }
   #card label.chk input[type="checkbox"] { width:18px; height:18px; accent-color:#1c4fd6; cursor:pointer; flex:none; }
-  #card .ntfy-box { display:grid; gap:6px; }
-  #card .ntfy-row { display:flex; gap:6px; align-items:center; }
-  #card .ntfy-row input { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#9fc0ff; background:#12151c; }
-  #card .ntfy-row button { padding:9px 12px; font-size:13px; white-space:nowrap; }
-  #card .ntfy-direct { font-size:13px; color:#6ea0ff; word-break:break-all; text-decoration:underline; }
-  #card .pc-help { font-size:12px; line-height:1.45; color:#8f9bb3; background:#12151c; border-radius:8px; padding:10px; display:grid; gap:4px; }
-  #card .pc-help strong { color:#cfd6e6; }
-  #card button#testNotif { background:#182238; border:1px solid #2b3f6b; color:#b7ceff; font-size:13px; padding:9px; }
-  #card button#testNotif:hover { background:#1f2d4a; }
+  #notifDetails { display:grid; gap:12px; }
+  .ntfy-actions { display:grid; grid-template-columns:1.35fr 1fr; gap:8px; }
+  .btn-ntfy { display:flex; align-items:center; justify-content:center; background:#182238; border:1px solid #2b3f6b; color:#b7ceff; border-radius:8px; padding:10px; font-size:14px; font-weight:500; text-decoration:none; text-align:center; }
+  .btn-ntfy:hover { background:#1f2d4a; }
+  #card button#copyNtfy { font-size:13px; padding:10px; background:#1e2433; border:1px solid #2a3040; }
+  .topic-tag { font-size:12px; color:#7d879c; font-family:ui-monospace,Menlo,Consolas,monospace; text-align:center; }
+  #card button#testNotif { background:#1e2433; border:1px solid #2a3040; color:#cfd6e6; font-size:13px; padding:9px; }
+  #card button#testNotif:hover { background:#272f42; }
 
-  #status { font-size:12px; color:#7d879c; min-height:1.2em; }
+  details.pc-help { background:#0a0c11; border:1px solid #222736; border-radius:8px; padding:9px 11px; font-size:12px; color:#8f9bb3; }
+  details.pc-help summary { cursor:pointer; color:#a9b2c7; font-weight:500; user-select:none; }
+  details.pc-help .help-body { margin-top:8px; display:grid; gap:6px; line-height:1.45; }
+  details.pc-help b { color:#cfd6e6; }
+
+  #status { font-size:12px; color:#7d879c; min-height:1.2em; text-align:center; }
 </style>
 </head>
 <body>
@@ -68,113 +86,136 @@
 
 <div id="settings">
   <div id="card">
-    <h2>Paramètres</h2>
-    <label>Rayon d’interception (km)
-      <input id="radius" type="number" min="1" max="200" step="1">
-    </label>
-    <label>Rafraîchissement (secondes)
-      <input id="refresh" type="number" min="2" max="300" step="1">
-    </label>
-    <label>Ville
-      <input id="city" type="text" placeholder="Tapez une ville…" autocomplete="off" spellcheck="false">
-    </label>
-    <div id="cityResults" hidden></div>
-    <button id="relayBtn" type="button">Relais</button>
-    <label id="relayWrap" hidden>Relais (optionnel, URL du Worker)
-      <input id="proxy" type="url" placeholder="https://radar-relay.sebnoel.workers.dev">
-    </label>
-    <label>Info 1 sous l’indicatif (vue radar)
-      <select id="radarInfo1">
-        <option value="alt">Altitude</option>
-        <option value="route">Origine → destination</option>
-        <option value="speed">Vitesse sol (kt)</option>
-        <option value="type">Type d’avion</option>
-        <option value="dist">Distance jusqu’à moi</option>
-        <option value="track">Cap (°)</option>
-        <option value="vrate">Montée / descente</option>
-        <option value="none">Aucune</option>
-      </select>
-    </label>
-    <label>Info 2 (en dessous)
-      <select id="radarInfo2">
-        <option value="alt">Altitude</option>
-        <option value="route">Origine → destination</option>
-        <option value="speed">Vitesse sol (kt)</option>
-        <option value="type">Type d’avion</option>
-        <option value="dist">Distance jusqu’à moi</option>
-        <option value="track">Cap (°)</option>
-        <option value="vrate">Montée / descente</option>
-        <option value="none">Aucune</option>
-      </select>
-    </label>
-    <label>Carte de fond (vue radar)
-      <select id="showMap">
-        <option value="1">Oui</option>
-        <option value="0">Non</option>
-      </select>
-    </label>
-    <label>Position des échelles de distance (radar)
-      <select id="scaleDir">
-        <option value="0">Nord</option>
-        <option value="45">Nord-Est</option>
-        <option value="90">Est</option>
-        <option value="135">Sud-Est</option>
-        <option value="180">Sud</option>
-        <option value="225">Sud-Ouest</option>
-        <option value="270">Ouest</option>
-        <option value="315">Nord-Ouest</option>
-      </select>
-    </label>
-    <label>Vol à suivre (indicatif, ex. AFR37LF)
-      <input id="follow" type="text" placeholder="vide = aucun" autocapitalize="characters" autocomplete="off" spellcheck="false">
-    </label>
+    <div class="modal-head">
+      <h2>Paramètres</h2>
+      <button id="close" type="button" class="icon-close" aria-label="Fermer">✕</button>
+    </div>
 
-    <!-- Section séparée : Notifications zénith (iPhone / Apple Watch / PC) -->
-    <div class="notif-section">
-      <h3>Notifications zénith</h3>
-      <label class="chk">
-        <input id="notifEnabled" type="checkbox">
-        <span>Activer les notifications de passage</span>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab on" data-tab="pos">Position</button>
+      <button type="button" class="tab" data-tab="notif">Alertes</button>
+      <button type="button" class="tab" data-tab="radar">Radar</button>
+    </div>
+
+    <!-- Onglet 1 : Position & suivi -->
+    <div id="tab-pos" class="tab-panel">
+      <label>Ville ou position GPS
+        <div class="input-group">
+          <input id="city" type="text" placeholder="Tapez une ville…" autocomplete="off" spellcheck="false">
+          <button id="geo" type="button" title="Utiliser ma position GPS" aria-label="Utiliser ma position GPS">📍</button>
+        </div>
       </label>
+      <div id="cityResults" hidden></div>
 
       <div class="row">
-        <label>Début (heure locale)
-          <input id="notifStart" type="time" value="09:00">
+        <label>Rayon (km)
+          <input id="radius" type="number" min="1" max="200" step="1">
         </label>
-        <label>Fin (minuit = 00:00)
-          <input id="notifEnd" type="time" value="00:00">
+        <label>Rafraîchissement (s)
+          <input id="refresh" type="number" min="2" max="300" step="1">
         </label>
       </div>
 
-      <label>Angle zénithal maximum (°)
-        <input id="notifAngle" type="number" min="1" max="85" step="1" value="15">
+      <label>Vol à suivre (indicatif, ex. AFR37LF)
+        <input id="follow" type="text" placeholder="vide = aucun" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      </label>
+    </div>
+
+    <!-- Onglet 2 : Notifications zénith -->
+    <div id="tab-notif" class="tab-panel" hidden>
+      <label class="chk">
+        <input id="notifEnabled" type="checkbox">
+        <span>Activer les notifications zénith</span>
       </label>
 
-      <div class="ntfy-box">
-        <label>Canal privé ntfy
-          <div class="ntfy-row">
-            <input id="ntfyTopic" type="text" readonly>
-            <button id="copyNtfy" type="button">Copier</button>
-          </div>
+      <div id="notifDetails" hidden>
+        <label>Angle zénithal maximum (°)
+          <input id="notifAngle" type="number" min="1" max="85" step="1" value="15">
         </label>
-        <a id="ntfyLink" class="ntfy-direct" href="#" target="_blank" rel="noopener"></a>
-      </div>
 
-      <div class="pc-help">
-        <strong>Vous configurez depuis un PC ?</strong>
-        <span>1. Installez l’app gratuite <b>ntfy</b> sur votre iPhone (App Store) ou Android (Google Play) — les alertes s’afficheront aussi sur votre Apple Watch.</span>
-        <span>2. Ouvrez l’app, appuyez sur <b>+</b> et saisissez le nom du canal privé ci-dessus (ou ouvrez le lien directement sur votre téléphone).</span>
-        <span>3. <i>Optionnel :</i> cliquez sur le lien ci-dessus pour recevoir aussi les alertes dans un onglet de ce PC.</span>
-      </div>
+        <div class="row">
+          <label>Début (heure locale)
+            <input id="notifStart" type="time" value="09:00">
+          </label>
+          <label>Fin (minuit = 00:00)
+            <input id="notifEnd" type="time" value="00:00">
+          </label>
+        </div>
 
-      <button id="testNotif" type="button">Tester la notification</button>
+        <div class="ntfy-actions">
+          <a id="ntfyLink" class="btn-ntfy" href="#" target="_blank" rel="noopener">Ouvrir dans ntfy</a>
+          <button id="copyNtfy" type="button">Copier le code</button>
+        </div>
+        <div id="ntfyCodeLabel" class="topic-tag"></div>
+
+        <button id="testNotif" type="button">Tester la notification</button>
+
+        <details class="pc-help">
+          <summary>Comment installer sur iPhone, Apple Watch ou PC ?</summary>
+          <div class="help-body">
+            <p><b>Sur iPhone / Apple Watch :</b> téléchargez l’app gratuite <b>ntfy</b> (App Store), appuyez sur <b>+</b> et collez le code du canal (ou touchez <i>Ouvrir dans ntfy</i> depuis l’iPhone). Les alertes apparaîtront automatiquement sur votre Apple Watch.</p>
+            <p><b>Sur PC :</b> cliquez sur <i>Ouvrir dans ntfy</i> pour recevoir les alertes directement dans un onglet du navigateur.</p>
+          </div>
+        </details>
+      </div>
     </div>
 
-    <button id="geo" type="button">Utiliser ma position</button>
-    <div class="row">
-      <button id="close" type="button">Fermer</button>
-      <button id="save" type="button" class="p">Enregistrer</button>
+    <!-- Onglet 3 : Affichage Radar & Relais -->
+    <div id="tab-radar" class="tab-panel" hidden>
+      <div class="row">
+        <label>Info 1 (radar)
+          <select id="radarInfo1">
+            <option value="alt">Altitude</option>
+            <option value="route">Origine → destination</option>
+            <option value="speed">Vitesse sol (kt)</option>
+            <option value="type">Type d’avion</option>
+            <option value="dist">Distance jusqu’à moi</option>
+            <option value="track">Cap (°)</option>
+            <option value="vrate">Montée / descente</option>
+            <option value="none">Aucune</option>
+          </select>
+        </label>
+        <label>Info 2 (en dessous)
+          <select id="radarInfo2">
+            <option value="alt">Altitude</option>
+            <option value="route">Origine → destination</option>
+            <option value="speed">Vitesse sol (kt)</option>
+            <option value="type">Type d’avion</option>
+            <option value="dist">Distance jusqu’à moi</option>
+            <option value="track">Cap (°)</option>
+            <option value="vrate">Montée / descente</option>
+            <option value="none">Aucune</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label>Carte de fond
+          <select id="showMap">
+            <option value="1">Oui</option>
+            <option value="0">Non</option>
+          </select>
+        </label>
+        <label>Échelles distance
+          <select id="scaleDir">
+            <option value="0">Nord</option>
+            <option value="45">Nord-Est</option>
+            <option value="90">Est</option>
+            <option value="135">Sud-Est</option>
+            <option value="180">Sud</option>
+            <option value="225">Sud-Ouest</option>
+            <option value="270">Ouest</option>
+            <option value="315">Nord-Ouest</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Relais Worker (optionnel)
+        <input id="proxy" type="url" placeholder="https://radar-relay.sebnoel.workers.dev">
+      </label>
     </div>
+
+    <button id="save" type="button" class="p">Enregistrer</button>
     <div id="status"></div>
   </div>
 </div>
@@ -373,7 +414,7 @@ function demoPlanes(){
   const t = Date.now()/1000, r = cfg.radius;
   return [
     { flight:'UAL2186', hex:'demo1', track:((Math.atan2(-Math.sin(t/60)*0.0026, Math.cos(t/60)*0.0045)*180/Math.PI)+360)%360, t:'B737', lat:cfg.lat+(r*0.0045)*Math.sin(t/60), lon:cfg.lon+(r*0.004)*Math.cos(t/60), alt_baro:34000, gs:440 },
-    { flight:'AFR1234', hex:'demo2', track:90, t:'A320', lat:cfg.lat-(r*0.003), lon:cfg.lon+(r*0.002), alt_baro:12500, gs:310 }
+    { flight:'AFR1234', hex:'demo2', track:90, t:'A320', lat:cfg.lat-(r*0.0006), lon:cfg.lon+(r*0.0005), alt_baro:35000, gs:460 }
   ];
 }
 
@@ -538,7 +579,18 @@ function start(){
   rotTimer = setInterval(()=>{ idx++; render(); }, 8000);
 }
 
-/* ============ Synchronisation Notifications -> Worker ============ */
+/* ============ Onglets & Synchronisation Notifications ============ */
+function setTab(name){
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  ['pos','notif','radar'].forEach(t => $('tab-' + t).hidden = (t !== name));
+}
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
+function updateNotifUI(){
+  $('notifDetails').hidden = !$('notifEnabled').checked;
+}
+$('notifEnabled').addEventListener('change', updateNotifUI);
+
 function buildSubPayload(overridePos){
   const pos = overridePos || { lat: cfg.lat, lon: cfg.lon, city: cfg.city };
   return {
@@ -556,7 +608,7 @@ function buildSubPayload(overridePos){
 }
 
 async function syncNotif(payload){
-  const base = ( $('proxy').value.trim() || cfg.proxy || DEFAULTS.proxy ).replace(/\/$/,'');
+  const base = ($('proxy').value.trim() || cfg.proxy || DEFAULTS.proxy).replace(/\/$/,'');
   const r = await fetch(`${base}/notify/sub`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -570,10 +622,9 @@ async function syncNotif(payload){
 $('copyNtfy').onclick = async () => {
   try {
     await navigator.clipboard.writeText(cfg.ntfyTopic);
-    status('Nom du canal copié : ' + cfg.ntfyTopic);
+    status('Code copié : ' + cfg.ntfyTopic);
   } catch(e) {
-    $('ntfyTopic').select();
-    status('Sélectionnez et copiez le nom du canal');
+    status('Code du canal : ' + cfg.ntfyTopic);
   }
 };
 
@@ -581,7 +632,7 @@ $('testNotif').onclick = async () => {
   try {
     status('Envoi de la notification test…');
     const payload = buildSubPayload();
-    const base = ( $('proxy').value.trim() || cfg.proxy || DEFAULTS.proxy ).replace(/\/$/,'');
+    const base = ($('proxy').value.trim() || cfg.proxy || DEFAULTS.proxy).replace(/\/$/,'');
     const r = await fetch(`${base}/notify/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -589,7 +640,7 @@ $('testNotif').onclick = async () => {
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
-    status('Notification test envoyée ! Vérifiez votre téléphone ou montre.');
+    status('Notification test envoyée ! Vérifiez votre iPhone ou Apple Watch.');
   } catch(e) {
     status('Échec du test : ' + e.message);
   }
@@ -597,12 +648,12 @@ $('testNotif').onclick = async () => {
 
 /* Paramètres */
 function openSettings(){
+  setTab('pos');
   $('radius').value = cfg.radius;
   $('refresh').value = cfg.refresh;
   $('city').value = cfg.city;
   selPos = null;
   $('cityResults').hidden = true;
-  $('relayWrap').hidden = true;
   $('showMap').value = cfg.showMap ? '1' : '0';
   $('proxy').value = cfg.proxy || '';
   $('follow').value = cfg.follow || '';
@@ -614,10 +665,9 @@ function openSettings(){
   $('notifStart').value = cfg.notifStart || '09:00';
   $('notifEnd').value = cfg.notifEnd || '00:00';
   $('notifAngle').value = cfg.notifAngle || 15;
-  $('ntfyTopic').value = cfg.ntfyTopic;
-  const url = `https://ntfy.sh/${cfg.ntfyTopic}`;
-  $('ntfyLink').href = url;
-  $('ntfyLink').textContent = url;
+  $('ntfyLink').href = `https://ntfy.sh/${cfg.ntfyTopic}`;
+  $('ntfyCodeLabel').textContent = `Canal privé : ${cfg.ntfyTopic}`;
+  updateNotifUI();
 
   $('settings').classList.add('open');
 }
@@ -687,7 +737,6 @@ $('city').addEventListener('input', () => {
     catch(e){ if (my === citySeq) status('Recherche de ville impossible : ' + e.message); }
   }, 350);
 });
-$('relayBtn').onclick = () => { const w = $('relayWrap'); w.hidden = !w.hidden; if (!w.hidden) $('proxy').focus(); };
 $('geo').onclick = () => {
   if (!navigator.geolocation) return status('Géolocalisation non disponible sur cet appareil');
   status('Recherche de la position…');
@@ -788,9 +837,55 @@ function drawRadar(t){
     c.fillStyle = cg; c.beginPath(); c.arc(cx,cy,R,0,6.2832); c.fill();
   }
 
+  // cercles de distance + axes
   c.strokeStyle = `rgba(${GL},.6)`; c.lineWidth = 1.5*d;
   for (let k=1;k<=4;k++){ c.beginPath(); c.arc(cx,cy,R*k/4,0,6.2832); c.stroke(); }
   c.beginPath(); c.moveTo(cx-R,cy); c.lineTo(cx+R,cy); c.moveTo(cx,cy-R); c.lineTo(cx,cy+R); c.stroke();
+
+  // Zone d'alerte zénith (cône projeté à FL350 et FL100)
+  if (cfg.notifEnabled){
+    const tanA = Math.tan((cfg.notifAngle || 15) * Math.PI / 180);
+    const pxPerKm = R / cfg.radius;
+    const rCruisePx = 10.668 * tanA * pxPerKm; // FL350 (35 000 ft = 10,67 km)
+    const rLowPx = 3.048 * tanA * pxPerKm;     // FL100 (10 000 ft = 3,05 km)
+
+    c.save();
+    c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.clip();
+
+    // Halo ambre doux de la zone de croisière
+    c.fillStyle = 'rgba(255, 190, 60, 0.08)';
+    c.beginPath(); c.arc(cx, cy, Math.min(R, rCruisePx), 0, 6.2832); c.fill();
+
+    // Cercle pointillé extérieur (FL350)
+    if (rCruisePx <= R){
+      c.setLineDash([5*d, 4*d]);
+      c.strokeStyle = 'rgba(255, 190, 60, 0.72)';
+      c.lineWidth = 1.5*d;
+      c.beginPath(); c.arc(cx, cy, rCruisePx, 0, 6.2832); c.stroke();
+    }
+
+    // Cercle pointillé intérieur (FL100) pour visualiser l'évasement du cône
+    if (rLowPx >= 8*d && rLowPx < rCruisePx - 10*d && rLowPx <= R){
+      c.setLineDash([3*d, 4*d]);
+      c.strokeStyle = 'rgba(255, 190, 60, 0.35)';
+      c.lineWidth = 1.1*d;
+      c.beginPath(); c.arc(cx, cy, rLowPx, 0, 6.2832); c.stroke();
+    }
+    c.setLineDash([]);
+
+    // Légende sous le cercle FL350
+    if (rCruisePx >= 22*d && rCruisePx <= R - 14*d){
+      const zf = Math.max(9*d, R*0.022);
+      c.font = mono(zf);
+      c.fillStyle = 'rgba(255, 190, 60, 0.88)';
+      c.textAlign = 'center';
+      c.textBaseline = 'top';
+      c.fillText(`Zénith ${cfg.notifAngle}° (FL350)`, cx, cy + rCruisePx + 4*d);
+      c.textBaseline = 'middle';
+    }
+    c.restore();
+  }
+
   const lf = Math.max(10*d, R*0.03); c.font = mono(lf); c.fillStyle = `rgba(${GL},.85)`; c.textBaseline = 'middle';
   const sa = cfg.scaleDir * Math.PI/180, sdx = Math.round(Math.sin(sa)*1000)/1000, sdy = -Math.round(Math.cos(sa)*1000)/1000;
   for (let k=1;k<=4;k++){ const v = cfg.radius*k/4, r = R*k/4;
@@ -814,23 +909,38 @@ function drawRadar(t){
     const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
     if (Math.hypot(px-cx,py-cy) > R + s) continue;
 
+    // Vérification en temps réel si l'avion est dans le cône de son altitude
+    const dk = Math.hypot(x,y);
+    const altKm = (typeof p.alt_baro === 'number' && p.alt_baro > 300) ? p.alt_baro * 0.0003048 : null;
+    const zAngle = altKm ? Math.atan2(dk, altKm) * 180 / Math.PI : 90;
+    const inAlert = cfg.notifEnabled && zAngle <= cfg.notifAngle;
+
+    if (inAlert){
+      c.strokeStyle = 'rgba(255, 190, 60, 0.9)';
+      c.lineWidth = 1.6*d;
+      c.beginPath(); c.arc(px, py, s*1.85, 0, 6.2832); c.stroke();
+    }
+
     c.save(); c.translate(px,py); c.rotate(tr);
-    c.fillStyle = '#d6ff3a'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 10*d;
+    c.fillStyle = inAlert ? '#ffbe3c' : '#d6ff3a';
+    c.shadowColor = inAlert ? '#ffbe3c' : '#d6ff3a';
+    c.shadowBlur = 10*d;
     c.beginPath(); PLANE.forEach(([a,b],i) => i ? c.lineTo(a*s,b*s) : c.moveTo(a*s,b*s)); c.closePath(); c.fill();
     c.restore(); c.shadowBlur = 0;
 
-    const cs = (p.flight || p.hex || '?').trim(), dk = Math.hypot(x,y), infos = [radarInfoText(p, cs, dk, cfg.radarInfo1), radarInfoText(p, cs, dk, cfg.radarInfo2)].filter(Boolean);
+    const cs = (p.flight || p.hex || '?').trim(), infos = [radarInfoText(p, cs, dk, cfg.radarInfo1), radarInfoText(p, cs, dk, cfg.radarInfo2)].filter(Boolean);
     const followed = cfg.follow && cs === cfg.follow;
-    c.font = mono(fs); c.fillStyle = followed ? '#ffffff' : '#e8ffe0';
+    c.font = mono(fs); c.fillStyle = inAlert ? '#ffcf6e' : (followed ? '#ffffff' : '#e8ffe0');
     c.shadowColor = '#000'; c.shadowBlur = 4*d;
     const lx = px + s*1.4, ly = py - fs*0.15; c.fillText(cs, lx, ly);
-    if (infos.length){ c.font = mono(fs*0.75); c.fillStyle = `rgba(${GL},.95)`; infos.forEach((t,i) => c.fillText(t, lx, ly + fs*(0.95 + i*0.85))); } c.shadowBlur = 0;
+    if (infos.length){ c.font = mono(fs*0.75); c.fillStyle = inAlert ? 'rgba(255, 207, 110, 0.92)' : `rgba(${GL},.95)`; infos.forEach((t,i) => c.fillText(t, lx, ly + fs*(0.95 + i*0.85))); } c.shadowBlur = 0;
     c.font = mono(fs);
     radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*(1.1 + infos.length*0.85) });
   }
 
   c.font = mono(Math.max(11*d, R*0.028)); c.fillStyle = `rgba(${GL},.7)`; c.textAlign = 'left'; c.textBaseline = 'top';
-  c.fillText(`${planes.length} aircraft · ${cfg.radius} km`, 14*d, 14*d);
+  const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
+  c.fillText(hud, 14*d, 14*d);
   if (cfg.showMap){ c.font = mono(Math.max(9*d, R*0.02)); c.fillStyle = 'rgba(90,255,130,.45)'; c.textAlign = 'right'; c.textBaseline = 'bottom';
     c.fillText('© Esri · © OpenStreetMap', W-10*d, H-8*d); c.textAlign = 'left'; }
   c.textBaseline = 'alphabetic';
