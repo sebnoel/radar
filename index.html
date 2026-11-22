@@ -318,7 +318,8 @@ async function fetchFollow(){
     fetchRoute(ac);
   } else {
     followPlane = null; followAirborne = false;
-    if (followSeenAir && followLow && Date.now() - followLastSeen > 180000) landed();   // disparu près du sol
+    const gone = Date.now() - followLastSeen;
+    if (followSeenAir && ((followLow && gone > 180000) || gone > 600000)) landed();   // disparu : près du sol 3 min, sinon 10 min
   }
 }
 
@@ -350,6 +351,7 @@ function render(){
   updateButtons();
   if (pinned()){
     if (followPlane) showPlane(followPlane);
+    else if (followSeenAir) show({ l1:'Following', l2:cfg.follow, l4:'Signal lost', l5l:`Last seen ${hhmm(new Date(followLastSeen))}`, l6: followLow ? 'Probably landed' : '' });
     else show({ l1:'Following', l2:cfg.follow, l4:'Searching...', l5l:'Not in the air yet' });
     return;
   }
