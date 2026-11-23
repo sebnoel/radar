@@ -82,6 +82,7 @@
 
   #status { font-size:12px; color:#7d879c; min-height:1.2em; text-align:center; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 </head>
 <body>
 
@@ -226,6 +227,14 @@
           </select>
         </label>
       </div>
+
+      <label>Satellites (vue radar)
+        <select id="satMode">
+          <option value="sky">Visible dans le ciel (élév. ≥ 15°)</option>
+          <option value="ground">Trace au sol (rayon radar)</option>
+          <option value="off">Désactivés</option>
+        </select>
+      </label>
     </div>
 
     <button id="save" type="button" class="p">Enregistrer</button>
@@ -374,6 +383,7 @@ addEventListener('resize', paint);
 const DEFAULTS = {
   radius:30, refresh:10, lat:48.8566, lon:2.3522,
   follow:'', radarInfo1:'route', radarInfo2:'vrate', scaleDir:45, city:'Paris', showMap:true,
+  satMode:'sky',
   notifEnabled:false, notifStart:'09:00', notifEnd:'00:00', notifAngle:15, ntfyTopic:'', updatedAt:0
 };
 let cfg = Object.assign({}, DEFAULTS);
@@ -389,6 +399,7 @@ function normalizeCfg(){
   if (!(cfg.scaleDir >= 0 && cfg.scaleDir < 360 && cfg.scaleDir % 45 === 0)) cfg.scaleDir = DEFAULTS.scaleDir;
   if (!cfg.city) cfg.city = (cfg.lat === DEFAULTS.lat && cfg.lon === DEFAULTS.lon) ? 'Paris' : 'Ma position';
   cfg.showMap = cfg.showMap !== false;
+  if (!['sky', 'ground', 'off'].includes(cfg.satMode)) cfg.satMode = 'sky';
   cfg.notifEnabled = !!cfg.notifEnabled;
   if (!cfg.notifStart) cfg.notifStart = '09:00';
   if (!cfg.notifEnd) cfg.notifEnd = '00:00';
@@ -612,6 +623,122 @@ function start(){
   rotTimer = setInterval(()=>{ idx++; render(); }, 8000);
 }
 
+/* ============ Satellites (CelesTrak + satellite.js) ============ */
+let satRecords = [];
+let satLastFetch = 0;
+let satFetching = false;
+
+async function ensureSatellites(){
+  if (cfg.satMode === 'off' || !window.satellite) return;
+  if (satFetching || (satRecords.length && Date.now() - satLastFetch < 7200000)) return;
+  satFetching = true;
+  try {
+    const j = await getJSON(`${RELAY_URL}/satellites`);
+    const list = [];
+    for (const item of (j.sats || [])){
+      try {
+        const satrec = window.satellite.twoline2satrec(item.tle1, item.tle2);
+        if (satrec && !satrec.error) list.push({ name: item.name, satrec });
+      } catch(e){}
+    }
+    satRecords = list;
+    satLastFetch = Date.now();
+  } catch(e){}
+  finally { satFetching = false; }
+}
+
+function getVisibleSatellites(nowDate, cx, cy, R){
+  if (cfg.satMode === 'off' || !window.satellite || !satRecords.length) return [];
+  const satLib = window.satellite;
+  const gmst = satLib.gstime(nowDate);
+  const observerGd = {
+    longitude: satLib.degreesToRadians(cfg.lon),
+    latitude: satLib.degreesToRadians(cfg.lat),
+    height: 0.05
+  };
+  const kmx = 111.32 * Math.cos(cfg.lat * Math.PI / 180);
+  const kmy = 110.57;
+  const out = [];
+
+  const projectAt = (dt) => {
+    const g = satLib.gstime(dt);
+    return (satrec) => {
+      const pv = satLib.propagate(satrec, dt);
+      if (!pv || !pv.position) return null;
+      const ecf = satLib.eciToEcf(pv.position, g);
+      const look = satLib.ecfToLookAngles(observerGd, ecf);
+      const elevDeg = satLib.radiansToDegrees(look.elevation);
+      if (elevDeg <= 0) return null;
+      const geo = satLib.eciToGeodetic(pv.position, g);
+      const sLat = satLib.radiansToDegrees(geo.latitude);
+      const sLon = satLib.radiansToDegrees(geo.longitude);
+      const altKm = geo.height;
+
+      if (cfg.satMode === 'sky'){
+        if (elevDeg < 15) return null;
+        const frac = (90 - elevDeg) / 75;
+        return {
+          px: cx + Math.sin(look.azimuth) * frac * R,
+          py: cy - Math.cos(look.azimuth) * frac * R,
+          elevDeg,
+          altKm,
+          distKm: null
+        };
+      } else {
+        const dx = (sLon - cfg.lon) * kmx;
+        const dy = (sLat - cfg.lat) * kmy;
+        const dk = Math.hypot(dx, dy);
+        if (dk > cfg.radius) return null;
+        return {
+          px: cx + (dx / cfg.radius) * R,
+          py: cy - (dy / cfg.radius) * R,
+          elevDeg,
+          altKm,
+          distKm: dk
+        };
+      }
+    };
+  };
+
+  const projNow = projectAt(nowDate);
+  const projNext = projectAt(new Date(nowDate.getTime() + 3000));
+
+  // Échantillons d'orbite (-60s..+60s en mode ciel, -12s..+12s en mode trace au sol)
+  const stepSec = cfg.satMode === 'sky' ? 15 : 3;
+  const spanSteps = 4;
+  const pastProjs = [];
+  const futProjs = [];
+  for (let i = spanSteps; i >= 1; i--) pastProjs.push(projectAt(new Date(nowDate.getTime() - i * stepSec * 1000)));
+  for (let i = 1; i <= spanSteps; i++) futProjs.push(projectAt(new Date(nowDate.getTime() + i * stepSec * 1000)));
+
+  for (const s of satRecords){
+    const cur = projNow(s.satrec);
+    if (!cur) continue;
+    const nxt = projNext(s.satrec);
+    const angle = nxt ? Math.atan2(nxt.px - cur.px, -(nxt.py - cur.py)) : 0;
+
+    const pastPts = [];
+    for (const fn of pastProjs){ const pt = fn(s.satrec); if (pt) pastPts.push([pt.px, pt.py]); }
+    pastPts.push([cur.px, cur.py]);
+
+    const futPts = [[cur.px, cur.py]];
+    for (const fn of futProjs){ const pt = fn(s.satrec); if (pt) futPts.push([pt.px, pt.py]); }
+
+    out.push({
+      name: s.name,
+      px: cur.px,
+      py: cur.py,
+      angle,
+      elevDeg: cur.elevDeg,
+      altKm: cur.altKm,
+      distKm: cur.distKm,
+      pastPts,
+      futPts
+    });
+  }
+  return out;
+}
+
 /* ============ Synchronisation Cloud (PC <-> Mobile) & Notifications ============ */
 function cleanTopic(v){
   return String(v || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -651,6 +778,7 @@ async function pullRemoteConfig(topic, force = false){
     normalizeCfg();
     saveCfg();
     if ($('settings').classList.contains('open')) fillSettingsForm();
+    if (cfg.satMode !== 'off') ensureSatellites();
     render();
     return true;
   }
@@ -713,6 +841,7 @@ function fillSettingsForm(){
   $('radarInfo1').value = cfg.radarInfo1;
   $('radarInfo2').value = cfg.radarInfo2;
   $('scaleDir').value = String(cfg.scaleDir);
+  $('satMode').value = cfg.satMode || 'sky';
 
   $('notifEnabled').checked = !!cfg.notifEnabled;
   $('notifStart').value = cfg.notifStart || '09:00';
@@ -801,6 +930,7 @@ $('save').onclick = async () => {
     radarInfo1: $('radarInfo1').value,
     radarInfo2: $('radarInfo2').value,
     scaleDir: +$('scaleDir').value,
+    satMode: $('satMode').value,
     notifEnabled: $('notifEnabled').checked,
     notifStart: $('notifStart').value || '09:00',
     notifEnd: $('notifEnd').value || '00:00',
@@ -810,6 +940,7 @@ $('save').onclick = async () => {
   };
   normalizeCfg();
   saveCfg(); resetFollow();
+  if (cfg.satMode !== 'off') ensureSatellites();
 
   try {
     await Promise.all([
@@ -889,7 +1020,13 @@ function sizeRadar(){
     rcv.height = h;
   }
 }
-function showRadar(){ view = 'radar'; rcv.style.display = 'block'; sizeRadar(); requestAnimationFrame(radarLoop); }
+function showRadar(){
+  view = 'radar';
+  rcv.style.display = 'block';
+  sizeRadar();
+  ensureSatellites();
+  requestAnimationFrame(radarLoop);
+}
 function hideRadar(){ view = 'led'; rcv.style.display = 'none'; }
 
 addEventListener('resize', () => { if (view === 'radar') sizeRadar(); });
@@ -904,6 +1041,36 @@ function radarLoop(t){ if (view !== 'radar') return; sizeRadar(); drawRadar(t); 
 
 const PLANE = [[0,-1],[.12,-.55],[.95,.05],[.95,.22],[.12,0],[.1,.65],[.4,.85],[.4,.98],[0,.88],[-.4,.98],[-.4,.85],[-.1,.65],[-.12,0],[-.95,.22],[-.95,.05],[-.12,-.55]];
 const GL = '90,255,130';
+
+function drawSatelliteIcon(c, sx, sy, s, angle, d){
+  c.save();
+  c.translate(sx, sy);
+  c.rotate(angle);
+
+  // Halo cyan
+  c.fillStyle = 'rgba(56, 189, 248, 0.22)';
+  c.beginPath(); c.arc(0, 0, s * 1.9, 0, 6.2832); c.fill();
+
+  // Panneaux solaires gauche & droit
+  c.fillStyle = '#38bdf8';
+  c.strokeStyle = '#e0f2fe';
+  c.lineWidth = 1.1 * d;
+  for (const sign of [-1, 1]){
+    const x0 = sign > 0 ? s * 0.45 : -s * 1.45;
+    c.fillRect(x0, -s * 0.34, s * 1.0, s * 0.68);
+    c.strokeRect(x0, -s * 0.34, s * 1.0, s * 0.68);
+    c.beginPath();
+    c.moveTo(sign * s * 0.25, 0);
+    c.lineTo(sign * s * 0.45, 0);
+    c.stroke();
+  }
+
+  // Corps central du satellite
+  c.fillStyle = '#f0f9ff';
+  c.fillRect(-s * 0.28, -s * 0.28, s * 0.56, s * 0.56);
+  c.strokeRect(-s * 0.28, -s * 0.28, s * 0.56, s * 0.56);
+  c.restore();
+}
 
 function radarInfoText(p, cs, distKm, kind){
   switch (kind){
@@ -955,7 +1122,7 @@ function drawRadar(t){
   const c = rctx, d = window.devicePixelRatio || 1, W = rcv.width, H = rcv.height;
   if (!W || !H) return;
   const safe = getSafeInsets();
-  const topPad = (safe.top + 34) * d;
+  const topPad = (safe.top + (cfg.satMode !== 'off' ? 48 : 34)) * d;
   const botPad = (safe.bottom + 18) * d;
   const sidePad = (Math.max(safe.left, safe.right) + 16) * d;
 
@@ -1054,6 +1221,51 @@ function drawRadar(t){
 
   const kmx = 111.32*Math.cos(cfg.lat*Math.PI/180), kmy = 110.57, now = Date.now();
   const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
+
+  // Satellites (Option 2 : visible dans le ciel, ou Option 1 : trace au sol)
+  const visibleSats = getVisibleSatellites(new Date(now), cx, cy, R);
+  if (visibleSats.length){
+    c.save();
+    c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.clip();
+    for (const sat of visibleSats){
+      if (sat.pastPts.length >= 2){
+        c.strokeStyle = 'rgba(56, 189, 248, 0.65)';
+        c.lineWidth = 1.6 * d;
+        c.beginPath();
+        sat.pastPts.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py));
+        c.stroke();
+      }
+      if (sat.futPts.length >= 2){
+        c.setLineDash([4*d, 4*d]);
+        c.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+        c.lineWidth = 1.2 * d;
+        c.beginPath();
+        sat.futPts.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py));
+        c.stroke();
+        c.setLineDash([]);
+      }
+    }
+    c.restore();
+
+    for (const sat of visibleSats){
+      drawSatelliteIcon(c, sat.px, sat.py, s * 0.95, sat.angle, d);
+      const lx = sat.px + s * 1.45;
+      const ly = sat.py - fs * 0.15;
+      c.font = mono(fs * 0.92);
+      c.fillStyle = '#bae6fd';
+      c.shadowColor = '#000'; c.shadowBlur = 4 * d;
+      c.fillText(sat.name, lx, ly);
+      c.font = mono(fs * 0.72);
+      c.fillStyle = '#38bdf8';
+      const subTxt = cfg.satMode === 'sky'
+        ? `${Math.round(sat.altKm)} km · Élév. ${Math.round(sat.elevDeg)}°`
+        : `${Math.round(sat.altKm)} km · ${sat.distKm.toFixed(1)} km`;
+      c.fillText(subTxt, lx, ly + fs * 0.9);
+      c.shadowBlur = 0;
+    }
+  }
+
+  // Avions ADS-B
   radarHits = [];
   for (const p of planes){
     let x = (p.lon-cfg.lon)*kmx, y = (p.lat-cfg.lat)*kmy;
@@ -1093,9 +1305,19 @@ function drawRadar(t){
 
   const hudX = Math.max(14, safe.left + 12) * d;
   const hudY = Math.max(12, safe.top + 8) * d;
-  c.font = mono(Math.max(11*d, R*0.028)); c.fillStyle = `rgba(${GL},.75)`; c.textAlign = 'left'; c.textBaseline = 'top';
+  const hudFont = Math.max(11*d, R*0.028);
+  c.font = mono(hudFont); c.fillStyle = `rgba(${GL},.75)`; c.textAlign = 'left'; c.textBaseline = 'top';
   const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
   c.fillText(hud, hudX, hudY);
+
+  if (cfg.satMode !== 'off'){
+    c.fillStyle = visibleSats.length ? 'rgba(56, 189, 248, 0.9)' : 'rgba(56, 189, 248, 0.45)';
+    const satHud = cfg.satMode === 'sky'
+      ? `Satellites : ${visibleSats.length} visible(s) (élév. ≥ 15°)`
+      : `Satellites : ${visibleSats.length} (trace au sol ≤ ${cfg.radius} km)`;
+    c.fillText(satHud, hudX, hudY + hudFont * 1.35);
+  }
+
   if (cfg.showMap){
     c.font = mono(Math.max(9*d, R*0.02)); c.fillStyle = 'rgba(90,255,130,.45)'; c.textAlign = 'right'; c.textBaseline = 'bottom';
     c.fillText('© Esri · © OpenStreetMap', W - Math.max(10, safe.right + 10)*d, H - Math.max(8, safe.bottom + 6)*d);
@@ -1146,7 +1368,7 @@ function pingHeartbeat(){
   if (!cfg.notifEnabled || cleanTopic(cfg.ntfyTopic).length < 4) return;
   const key = 'fd-hb-' + cfg.ntfyTopic;
   const last = Number(localStorage.getItem(key) || 0);
-  if (Date.now() - last < 12 * 3600 * 1000) return; // Max 1 écriture toutes les 12 h
+  if (Date.now() - last < 12 * 3600 * 1000) return;
   fetch(`${RELAY_URL}/notify/heartbeat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
