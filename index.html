@@ -1024,24 +1024,28 @@ function drawRadar(t){
 
   const lf = Math.max(10*d, R*0.03); c.font = mono(lf); c.fillStyle = `rgba(${GL},.85)`; c.textBaseline = 'middle';
   const sa = cfg.scaleDir * Math.PI/180, sdx = Math.round(Math.sin(sa)*1000)/1000, sdy = -Math.round(Math.cos(sa)*1000)/1000;
+  const minX = (safe.left + 4) * d, maxX = W - (safe.right + 4) * d;
+  const minY = (safe.top + 4) * d, maxY = H - (safe.bottom + 4) * d;
+  let prevBox = null;
   for (let k=1;k<=4;k++){
     const v = cfg.radius*k/4, r = R*k/4;
     let tx = cx + r*sdx, ty = cy + r*sdy;
-    if (k === 4 && sdx < -0.1){
-      c.textAlign = 'left'; tx += 4*d;
-      if (Math.abs(sdy) < 0.1) ty -= lf*0.85;
-    } else if (k === 4 && sdx > 0.1){
-      c.textAlign = 'right'; tx -= 4*d;
-      if (Math.abs(sdy) < 0.1) ty -= lf*0.85;
-    } else if (sdx > 0.1){
-      c.textAlign = 'left'; tx += 4*d;
-    } else if (sdx < -0.1){
-      c.textAlign = 'right'; tx -= 4*d;
-    } else {
-      c.textAlign = 'left'; tx += lf*1.1;
-    }
-    if (k < 4 && sdy === 0) ty -= lf*0.8;
-    c.fillText((v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km', tx, ty);
+    if (sdx > 0.1){ c.textAlign = 'left'; tx += 4*d; }
+    else if (sdx < -0.1){ c.textAlign = 'right'; tx -= 4*d; }
+    else { c.textAlign = 'left'; tx += lf*1.1; }
+    if (sdy === 0) ty -= lf*0.8;
+
+    const label = (v >= 10 ? Math.round(v) : v.toFixed(1)) + ' km';
+    const w = c.measureText(label).width;
+    const x0 = c.textAlign === 'right' ? tx - w : tx;
+    const x1 = x0 + w;
+    const y0 = ty - lf * 0.6, y1 = ty + lf * 0.6;
+
+    if (x0 < minX || x1 > maxX || y0 < minY || y1 > maxY) continue;
+    if (prevBox && !(x1 + 4*d < prevBox.x0 || x0 - 4*d > prevBox.x1 || y1 < prevBox.y0 || y0 > prevBox.y1)) continue;
+
+    c.fillText(label, tx, ty);
+    prevBox = { x0, x1, y0, y1 };
   }
   c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText('N', cx, cy - R - 3*d); c.textAlign = 'left'; c.textBaseline = 'middle';
 
