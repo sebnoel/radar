@@ -1138,7 +1138,22 @@ if (qp.get('view') === 'radar') {
   addEventListener('pageshow', sizeRadar, { once: true });
 }
 
+function pingHeartbeat(){
+  if (!cfg.notifEnabled || cleanTopic(cfg.ntfyTopic).length < 4) return;
+  const key = 'fd-hb-' + cfg.ntfyTopic;
+  const last = Number(localStorage.getItem(key) || 0);
+  if (Date.now() - last < 12 * 3600 * 1000) return; // Max 1 écriture toutes les 12 h
+  fetch(`${RELAY_URL}/notify/heartbeat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic: cfg.ntfyTopic })
+  })
+    .then(r => { if (r.ok) localStorage.setItem(key, String(Date.now())); })
+    .catch(() => {});
+}
+
 function syncNow(force = false){
+  pingHeartbeat();
   pullRemoteConfig(cfg.ntfyTopic, force)
     .then(changed => { if (changed) { resetFollow(); idx = 0; start(); } })
     .catch(() => {});
@@ -1151,6 +1166,7 @@ if (syncParam.length >= 4) {
   show({ l1:'Sync', l2:syncParam, l4:'Loading profile...' });
   pullRemoteConfig(syncParam, true)
     .then(() => {
+      pingHeartbeat();
       resetFollow(); idx = 0; start();
       const cleanUrl = location.pathname + (qp.get('view') === 'radar' ? '?view=radar' : '');
       history.replaceState(null, '', cleanUrl);
