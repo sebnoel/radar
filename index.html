@@ -29,6 +29,9 @@
   #dock button.on { opacity:.75; border-color:rgba(255,255,255,.45); }
   #dock button:hover, #dock button:focus-visible { opacity:1; }
 
+  #recenter { position:fixed; left:50%; transform:translateX(-50%); bottom:max(14px, var(--sab)); z-index:5; font:13px system-ui,sans-serif; color:#e8ffe0; background:rgba(10,32,18,.88); border:1px solid rgba(90,255,130,.45); border-radius:999px; padding:7px 16px; cursor:pointer; letter-spacing:.02em; box-shadow:0 2px 10px rgba(0,0,0,.6); }
+  #recenter:hover, #recenter:focus-visible { background:rgba(18,56,32,.95); border-color:rgba(90,255,130,.85); }
+
   #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.92); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; padding:max(12px, var(--sat)) 12px max(12px, var(--sab)); }
   #settings.open { display:flex; }
   #card { background:#12151c; color:#e8ecf5; padding:20px; border-radius:14px; width:min(92vw,410px); max-height:92dvh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
@@ -92,6 +95,7 @@
   <button id="bNormal" type="button">Normal</button>
   <button id="bFollow" type="button"></button>
 </div>
+<button id="recenter" type="button" hidden>Recentrer</button>
 <button id="gear" aria-label="Paramètres">⚙</button>
 
 <div id="settings">
@@ -417,6 +421,30 @@ const TYPES = { B737:'Boeing 737', B738:'Boeing 737-800', B739:'Boeing 737-900',
 const routeCache = {};
 let planes = [], idx = 0, timer = null, rotTimer = null, lastSource = '';
 
+/* ---- Décalage temporaire de la carte (panoramique) ---- */
+let panLat = 0, panLon = 0;
+const viewLat = () => Math.max(-85, Math.min(85, cfg.lat + panLat));
+const viewLon = () => {
+  let l = cfg.lon + panLon;
+  while (l > 180) l -= 360;
+  while (l < -180) l += 360;
+  return l;
+};
+function updateRecenterBtn(){
+  const panned = Math.abs(panLat) > 1e-4 || Math.abs(panLon) > 1e-4;
+  $('recenter').hidden = !(view === 'radar' && panned);
+}
+function resetPan(){
+  panLat = 0;
+  panLon = 0;
+  updateRecenterBtn();
+}
+$('recenter').onclick = e => {
+  e.stopPropagation();
+  resetPan();
+  tick();
+};
+
 function status(m){ $('status').textContent = m; }
 function show(o){ Object.assign(scene, { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0 }, o); paint(); }
 
@@ -429,20 +457,21 @@ const hhmm = d => d.toTimeString().slice(0,5);
 async function getJSON(url, opt){ const r = await fetch(url, opt); if(!r.ok) throw new Error(r.status); return r.json(); }
 
 async function fetchPlanes(){
-  if (new URLSearchParams(location.search).has('demo')) return demoPlanes();
+  const cLat = viewLat(), cLon = viewLon();
+  if (new URLSearchParams(location.search).has('demo')) return demoPlanes(cLat, cLon);
   const nm = Math.min(250, Math.max(1, cfg.radius/1.852)).toFixed(1);
   const errs = [];
   const sources = [
-    ['adsb.lol',      `${RELAY_URL}/v2/point/${cfg.lat}/${cfg.lon}/${nm}`],
-    ['airplanes.live',`https://api.airplanes.live/v2/point/${cfg.lat}/${cfg.lon}/${nm}`]
+    ['adsb.lol',      `${RELAY_URL}/v2/point/${cLat.toFixed(4)}/${cLon.toFixed(4)}/${nm}`],
+    ['airplanes.live',`https://api.airplanes.live/v2/point/${cLat.toFixed(4)}/${cLon.toFixed(4)}/${nm}`]
   ];
   for (const [name,u] of sources){
     try { const j = await getJSON(u); lastSource = name; return j.ac || j.aircraft || []; }
     catch(e){ errs.push(name+': '+e.message); }
   }
   try {
-    const dLat = cfg.radius/111, dLon = cfg.radius/(111*Math.cos(cfg.lat*Math.PI/180));
-    const u = `https://opensky-network.org/api/states/all?lamin=${cfg.lat-dLat}&lamax=${cfg.lat+dLat}&lomin=${cfg.lon-dLon}&lomax=${cfg.lon+dLon}`;
+    const dLat = cfg.radius/111, dLon = cfg.radius/(111*Math.cos(cLat*Math.PI/180));
+    const u = `https://opensky-network.org/api/states/all?lamin=${cLat-dLat}&lamax=${cLat+dLat}&lomin=${cLon-dLon}&lomax=${cLon+dLon}`;
     const j = await getJSON(u); lastSource = 'opensky';
     return (j.states||[]).filter(x=>!x[8]).map(x=>({ flight:(x[1]||'').trim(), hex:x[0], lon:x[5], lat:x[6],
       alt_baro: x[7]!=null ? x[7]*3.281 : null, gs: x[9]!=null ? x[9]*1.944 : 0, track: x[10] ?? 0, t:'' }));
@@ -450,12 +479,12 @@ async function fetchPlanes(){
   throw new Error(errs.join(' | '));
 }
 
-function demoPlanes(){
+function demoPlanes(cLat = cfg.lat, cLon = cfg.lon){
   lastSource = 'demo';
   const t = Date.now()/1000, r = cfg.radius;
   return [
-    { flight:'UAL2186', hex:'demo1', track:((Math.atan2(-Math.sin(t/60)*0.0026, Math.cos(t/60)*0.0045)*180/Math.PI)+360)%360, t:'B737', lat:cfg.lat+(r*0.0045)*Math.sin(t/60), lon:cfg.lon+(r*0.004)*Math.cos(t/60), alt_baro:34000, gs:440 },
-    { flight:'AFR1234', hex:'demo2', track:90, t:'A320', lat:cfg.lat-(r*0.0006), lon:cfg.lon+(r*0.0005), alt_baro:35000, gs:460 }
+    { flight:'UAL2186', hex:'demo1', track:((Math.atan2(-Math.sin(t/60)*0.0026, Math.cos(t/60)*0.0045)*180/Math.PI)+360)%360, t:'B737', lat:cLat+(r*0.0045)*Math.sin(t/60), lon:cLon+(r*0.004)*Math.cos(t/60), alt_baro:34000, gs:440 },
+    { flight:'AFR1234', hex:'demo2', track:90, t:'A320', lat:cLat-(r*0.0006), lon:cLon+(r*0.0005), alt_baro:35000, gs:460 }
   ];
 }
 
@@ -553,7 +582,7 @@ async function fetchFollow(){
 }
 
 function updateButtons(){
-  $('dock').style.display = cfg.follow ? 'flex' : 'none';
+  $('dock').style.display = (cfg.follow && view === 'led') ? 'flex' : 'none';
   if (!cfg.follow) return;
   $('bFollow').textContent = cfg.follow;
   const pin = pinned();
@@ -606,12 +635,17 @@ function render(){
 }
 
 async function tick(){
+  const cLat = viewLat(), cLon = viewLon();
   try {
     const ac = await fetchPlanes();
     planes = ac.filter(a => typeof a.lat==='number' && typeof a.lon==='number')
-               .map(a => Object.assign(a, { _d: km(cfg.lat,cfg.lon,a.lat,a.lon), _t: Date.now() }))
-               .filter(a => a._d <= cfg.radius)
-               .sort((a,b) => a._d - b._d);
+               .map(a => Object.assign(a, {
+                 _d: km(cfg.lat, cfg.lon, a.lat, a.lon),
+                 _vd: km(cLat, cLon, a.lat, a.lon),
+                 _t: Date.now()
+               }))
+               .filter(a => a._vd <= cfg.radius)
+               .sort((a,b) => a._vd - b._vd);
     planes.slice(0, (cfg.radarInfo1 === 'route' || cfg.radarInfo2 === 'route') ? 12 : 3).forEach(fetchRoute);
     if (pickedHex && Date.now() < pickedUntil){
       const q = planes.find(a => a.hex === pickedHex);
@@ -659,15 +693,15 @@ async function ensureSatellites(){
   finally { satFetching = false; }
 }
 
-function getVisibleSatellites(nowDate, cx, cy, R){
+function getVisibleSatellites(nowDate, cx, cy, R, cLat, cLon){
   if (cfg.satMode === 'off' || !window.satellite || !satRecords.length) return [];
   const satLib = window.satellite;
   const observerGd = {
-    longitude: satLib.degreesToRadians(cfg.lon),
-    latitude: satLib.degreesToRadians(cfg.lat),
+    longitude: satLib.degreesToRadians(cLon),
+    latitude: satLib.degreesToRadians(cLat),
     height: 0.05
   };
-  const kmx = 111.32 * Math.cos(cfg.lat * Math.PI / 180);
+  const kmx = 111.32 * Math.cos(cLat * Math.PI / 180);
   const kmy = 110.57;
   const out = [];
 
@@ -696,8 +730,8 @@ function getVisibleSatellites(nowDate, cx, cy, R){
           distKm: null
         };
       } else {
-        const dx = (sLon - cfg.lon) * kmx;
-        const dy = (sLat - cfg.lat) * kmy;
+        const dx = (sLon - cLon) * kmx;
+        const dy = (sLat - cLat) * kmy;
         const dk = Math.hypot(dx, dy);
         if (dk > cfg.radius) return null;
         return {
@@ -787,6 +821,7 @@ async function pullRemoteConfig(topic, force = false){
     Object.assign(cfg, remote, { ntfyTopic: t });
     normalizeCfg();
     saveCfg();
+    resetPan();
     if ($('settings').classList.contains('open')) fillSettingsForm();
     if (cfg.satMode !== 'off') ensureSatellites();
     render();
@@ -949,7 +984,7 @@ $('save').onclick = async () => {
     updatedAt: Date.now()
   };
   normalizeCfg();
-  saveCfg(); resetFollow();
+  saveCfg(); resetFollow(); resetPan();
   if (cfg.satMode !== 'off') ensureSatellites();
 
   try {
@@ -1033,11 +1068,20 @@ function sizeRadar(){
 function showRadar(){
   view = 'radar';
   rcv.style.display = 'block';
+  updateButtons();
+  updateRecenterBtn();
   sizeRadar();
   ensureSatellites();
   requestAnimationFrame(radarLoop);
 }
-function hideRadar(){ view = 'led'; rcv.style.display = 'none'; }
+function hideRadar(){
+  const wasPanned = Math.abs(panLat) > 1e-4 || Math.abs(panLon) > 1e-4;
+  view = 'led';
+  rcv.style.display = 'none';
+  resetPan();
+  updateButtons();
+  if (wasPanned) tick();
+}
 
 addEventListener('resize', () => { if (view === 'radar') sizeRadar(); });
 if (window.visualViewport){
@@ -1105,7 +1149,7 @@ function getTile(z,x,y){
   return t;
 }
 function drawMap(c, cx, cy, R){
-  const lat0 = cfg.lat, lon0 = cfg.lon, rad = cfg.radius, coslat = Math.cos(lat0*Math.PI/180);
+  const lat0 = viewLat(), lon0 = viewLon(), rad = cfg.radius, coslat = Math.cos(lat0*Math.PI/180);
   const kmx = 111.32*coslat, kmy = 110.57;
   const z = Math.max(3, Math.min(16, Math.floor(Math.log2(156543.03*coslat*R/(rad*1000)))));
   const n = 2**z, X = lon => (lon+180)/360*n, Y = lat => { const r = lat*Math.PI/180; return (1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI)/2*n; };
@@ -1140,6 +1184,13 @@ function drawRadar(t){
   const R = Math.max(40*d, Math.min((W - 2*sidePad)/2, (H - topPad - botPad)/2));
   const mono = px => `600 ${px}px ui-monospace, Menlo, Consolas, monospace`;
 
+  const vLat = viewLat(), vLon = viewLon();
+  const kmx = 111.32*Math.cos(vLat*Math.PI/180), kmy = 110.57;
+
+  // Position écran de la maison (ancrée à cfg.lat / cfg.lon lors d'un déplacement)
+  const homeX = cx + ((cfg.lon - vLon)*kmx / cfg.radius) * R;
+  const homeY = cy - ((cfg.lat - vLat)*kmy / cfg.radius) * R;
+
   const g = c.createRadialGradient(cx,cy,0,cx,cy,R); g.addColorStop(0,'#0d4a20'); g.addColorStop(1,'#04200d');
   c.fillStyle = g; c.beginPath(); c.arc(cx,cy,R,0,6.2832); c.fill();
 
@@ -1156,7 +1207,7 @@ function drawRadar(t){
   for (let k=1;k<=4;k++){ c.beginPath(); c.arc(cx,cy,R*k/4,0,6.2832); c.stroke(); }
   c.beginPath(); c.moveTo(cx-R,cy); c.lineTo(cx+R,cy); c.moveTo(cx,cy-R); c.lineTo(cx,cy+R); c.stroke();
 
-  // Zone d'alerte zénith (cône projeté à FL350 et FL100)
+  // Zone d'alerte zénith (ancrée sur la position maison)
   if (cfg.notifEnabled){
     const tanA = Math.tan((cfg.notifAngle || 15) * Math.PI / 180);
     const pxPerKm = R / cfg.radius;
@@ -1167,20 +1218,20 @@ function drawRadar(t){
     c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.clip();
 
     c.fillStyle = 'rgba(255, 190, 60, 0.08)';
-    c.beginPath(); c.arc(cx, cy, Math.min(R, rCruisePx), 0, 6.2832); c.fill();
+    c.beginPath(); c.arc(homeX, homeY, rCruisePx, 0, 6.2832); c.fill();
 
-    if (rCruisePx <= R){
+    if (rCruisePx >= 4*d){
       c.setLineDash([5*d, 4*d]);
       c.strokeStyle = 'rgba(255, 190, 60, 0.72)';
       c.lineWidth = 1.5*d;
-      c.beginPath(); c.arc(cx, cy, rCruisePx, 0, 6.2832); c.stroke();
+      c.beginPath(); c.arc(homeX, homeY, rCruisePx, 0, 6.2832); c.stroke();
     }
 
-    if (rLowPx >= 8*d && rLowPx < rCruisePx - 10*d && rLowPx <= R){
+    if (rLowPx >= 8*d && rLowPx < rCruisePx - 10*d){
       c.setLineDash([3*d, 4*d]);
       c.strokeStyle = 'rgba(255, 190, 60, 0.35)';
       c.lineWidth = 1.1*d;
-      c.beginPath(); c.arc(cx, cy, rLowPx, 0, 6.2832); c.stroke();
+      c.beginPath(); c.arc(homeX, homeY, rLowPx, 0, 6.2832); c.stroke();
     }
     c.setLineDash([]);
 
@@ -1190,7 +1241,7 @@ function drawRadar(t){
       c.fillStyle = 'rgba(255, 190, 60, 0.88)';
       c.textAlign = 'center';
       c.textBaseline = 'top';
-      c.fillText(`Zénith ${cfg.notifAngle}° (FL350)`, cx, cy + rCruisePx + 4*d);
+      c.fillText(`Zénith ${cfg.notifAngle}° (FL350)`, homeX, homeY + rCruisePx + 4*d);
       c.textBaseline = 'middle';
     }
     c.restore();
@@ -1223,14 +1274,24 @@ function drawRadar(t){
   }
   c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText('N', cx, cy - R - 3*d); c.textAlign = 'left'; c.textBaseline = 'middle';
 
-  c.fillStyle = '#f4ffd0'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 12*d;
-  c.beginPath(); c.arc(cx,cy,5*d,0,6.2832); c.fill(); c.shadowBlur = 0;
+  // Repère maison (si visible dans le disque) + croix centrale si déplacé
+  if (Math.hypot(homeX - cx, homeY - cy) <= R){
+    c.fillStyle = '#f4ffd0'; c.shadowColor = '#d6ff3a'; c.shadowBlur = 12*d;
+    c.beginPath(); c.arc(homeX, homeY, 5*d, 0, 6.2832); c.fill(); c.shadowBlur = 0;
+  }
+  if (Math.abs(panLat) > 1e-4 || Math.abs(panLon) > 1e-4){
+    c.strokeStyle = `rgba(${GL},.65)`; c.lineWidth = 1.2*d;
+    c.beginPath();
+    c.moveTo(cx - 6*d, cy); c.lineTo(cx + 6*d, cy);
+    c.moveTo(cx, cy - 6*d); c.lineTo(cx, cy + 6*d);
+    c.stroke();
+  }
 
-  const kmx = 111.32*Math.cos(cfg.lat*Math.PI/180), kmy = 110.57, now = Date.now();
+  const now = Date.now();
   const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
 
   // Satellites
-  const visibleSats = getVisibleSatellites(new Date(now), cx, cy, R);
+  const visibleSats = getVisibleSatellites(new Date(now), cx, cy, R, vLat, vLon);
   if (visibleSats.length){
     c.save();
     c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.clip();
@@ -1273,17 +1334,24 @@ function drawRadar(t){
   }
 
   // Avions ADS-B
+  const homeKmx = 111.32*Math.cos(cfg.lat*Math.PI/180);
   radarHits = [];
   for (const p of planes){
-    let x = (p.lon-cfg.lon)*kmx, y = (p.lat-cfg.lat)*kmy;
     const tr = (p.track || 0) * Math.PI/180, v = (p.gs||0)*1.852/3600 * Math.min(30, (now-(p._t||now))/1000);
-    x += Math.sin(tr)*v; y += Math.cos(tr)*v;
-    const px = cx + x/cfg.radius*R, py = cy - y/cfg.radius*R;
+    const dxStep = Math.sin(tr)*v, dyStep = Math.cos(tr)*v;
+
+    // Position relative au centre de la vue radar
+    const vx = (p.lon - vLon)*kmx + dxStep;
+    const vy = (p.lat - vLat)*kmy + dyStep;
+    const px = cx + vx/cfg.radius*R, py = cy - vy/cfg.radius*R;
     if (Math.hypot(px-cx,py-cy) > R + s) continue;
 
-    const dk = Math.hypot(x,y);
+    // Distance réelle par rapport à la maison (pour l'angle zénithal et l'info distance)
+    const hx = (p.lon - cfg.lon)*homeKmx + dxStep;
+    const hy = (p.lat - cfg.lat)*kmy + dyStep;
+    const dkHome = Math.hypot(hx, hy);
     const altKm = (typeof p.alt_baro === 'number' && p.alt_baro > 300) ? p.alt_baro * 0.0003048 : null;
-    const zAngle = altKm ? Math.atan2(dk, altKm) * 180 / Math.PI : 90;
+    const zAngle = altKm ? Math.atan2(dkHome, altKm) * 180 / Math.PI : 90;
     const isPicked = pickedHex && Date.now() < pickedUntil && p.hex === pickedHex;
     const inAlert = (cfg.notifEnabled && zAngle <= cfg.notifAngle) || isPicked;
 
@@ -1300,7 +1368,7 @@ function drawRadar(t){
     c.beginPath(); PLANE.forEach(([a,b],i) => i ? c.lineTo(a*s,b*s) : c.moveTo(a*s,b*s)); c.closePath(); c.fill();
     c.restore(); c.shadowBlur = 0;
 
-    const cs = (p.flight || p.hex || '?').trim(), infos = [radarInfoText(p, cs, dk, cfg.radarInfo1), radarInfoText(p, cs, dk, cfg.radarInfo2)].filter(Boolean);
+    const cs = (p.flight || p.hex || '?').trim(), infos = [radarInfoText(p, cs, dkHome, cfg.radarInfo1), radarInfoText(p, cs, dkHome, cfg.radarInfo2)].filter(Boolean);
     const followed = cfg.follow && cs === cfg.follow;
     c.font = mono(fs); c.fillStyle = inAlert ? '#ffcf6e' : (followed ? '#ffffff' : '#e8ffe0');
     c.shadowColor = '#000'; c.shadowBlur = 4*d;
@@ -1333,20 +1401,36 @@ function drawRadar(t){
   c.textBaseline = 'alphabetic';
 }
 
-/* ============ Zoom radar : pincement à 2 doigts (mobile) & molette/trackpad (PC) ============ */
-let pinchStartDist = 0, pinchStartRadius = 30, isPinching = false, pinchCooldown = 0, zoomFetchT = null;
+/* ============ Zoom & Panoramique radar (2 doigts mobile + souris/molette PC) ============ */
+let pinchStartDist = 0, pinchStartRadius = 30, pinchMidX = 0, pinchMidY = 0;
+let isPinching = false, isDragging = false, dragMoved = false, dragX = 0, dragY = 0;
+let pinchCooldown = 0, zoomFetchT = null;
 
-function applyRadarZoom(nextRadius, debounceMs = 0){
+function scheduleRadarFetch(ms = 300){
+  clearTimeout(zoomFetchT);
+  zoomFetchT = setTimeout(() => tick(), ms);
+}
+
+function applyRadarZoom(nextRadius, debounceMs = 300){
   const clamped = Math.round(Math.min(200, Math.max(5, nextRadius)));
   if (clamped === cfg.radius) return;
   cfg.radius = clamped;
   saveCfg();
-  clearTimeout(zoomFetchT);
-  if (debounceMs > 0){
-    zoomFetchT = setTimeout(() => tick(), debounceMs);
-  } else {
-    tick();
-  }
+  scheduleRadarFetch(debounceMs);
+}
+
+function panByPixels(dxPx, dyPx){
+  const d = window.devicePixelRatio || 1;
+  const safe = getSafeInsets();
+  const topPad = (safe.top + (cfg.satMode !== 'off' ? 48 : 34)) * d;
+  const botPad = (safe.bottom + 18) * d;
+  const sidePad = (Math.max(safe.left, safe.right) + 16) * d;
+  const R = Math.max(40*d, Math.min((rcv.width - 2*sidePad)/2, (rcv.height - topPad - botPad)/2));
+  const kmPerCssPx = (cfg.radius / R) * d;
+  const coslat = Math.max(0.1, Math.cos(viewLat() * Math.PI / 180));
+  panLon -= (dxPx * kmPerCssPx) / (111.32 * coslat);
+  panLat += (dyPx * kmPerCssPx) / 110.57;
+  updateRecenterBtn();
 }
 
 function touchDist(touches){
@@ -1356,6 +1440,7 @@ function touchDist(touches){
   );
 }
 
+// Mobile : pincement (zoom) + glissement simultané à 2 doigts (déplacement)
 rcv.addEventListener('touchstart', e => {
   if (e.touches.length === 2){
     e.preventDefault();
@@ -1363,12 +1448,20 @@ rcv.addEventListener('touchstart', e => {
     isPinching = true;
     pinchStartDist = Math.max(10, touchDist(e.touches));
     pinchStartRadius = cfg.radius;
+    pinchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
   }
 }, { passive: false });
 
 rcv.addEventListener('touchmove', e => {
   if (isPinching && e.touches.length === 2){
     e.preventDefault();
+    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    panByPixels(midX - pinchMidX, midY - pinchMidY);
+    pinchMidX = midX;
+    pinchMidY = midY;
+
     const dist = Math.max(10, touchDist(e.touches));
     const ratio = pinchStartDist / dist;
     const nextRadius = Math.round(Math.min(200, Math.max(5, pinchStartRadius * ratio)));
@@ -1387,6 +1480,37 @@ rcv.addEventListener('touchend', e => {
   }
 });
 
+// PC : cliquer-glisser (avec ou sans Shift) pour déplacer la carte
+rcv.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  isDragging = true;
+  dragMoved = false;
+  dragX = e.clientX;
+  dragY = e.clientY;
+});
+
+addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - dragX, dy = e.clientY - dragY;
+  if (!dragMoved && Math.hypot(dx, dy) < 6) return;
+  dragMoved = true;
+  rcv.style.cursor = 'grabbing';
+  panByPixels(dx, dy);
+  dragX = e.clientX;
+  dragY = e.clientY;
+});
+
+addEventListener('mouseup', () => {
+  if (!isDragging) return;
+  isDragging = false;
+  rcv.style.cursor = 'pointer';
+  if (dragMoved){
+    pinchCooldown = Date.now() + 250;
+    scheduleRadarFetch(250);
+  }
+});
+
+// PC : molette ou pincement trackpad pour zoomer
 rcv.addEventListener('wheel', e => {
   e.preventDefault();
   const delta = Math.max(-120, Math.min(120, e.deltaY));
@@ -1412,7 +1536,7 @@ function radarClick(e){
 }
 let radarClickT = null;
 rcv.addEventListener('click', e => {
-  if (isPinching || Date.now() < pinchCooldown) return;
+  if (isPinching || dragMoved || Date.now() < pinchCooldown) return;
   const pt = { offsetX:e.offsetX, offsetY:e.offsetY };
   clearTimeout(radarClickT);
   radarClickT = setTimeout(() => radarClick(pt), 280);
