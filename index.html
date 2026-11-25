@@ -357,7 +357,6 @@ function compose(){
 
 const cvs = $('led'), ctx = cvs.getContext('2d');
 const lit = document.createElement('canvas');
-const glow = document.createElement('canvas');
 function paint(){
   compose();
   const dpr = window.devicePixelRatio || 1;
@@ -368,25 +367,18 @@ function paint(){
   cvs.width = W*p; cvs.height = H*p;
   cvs.style.width = (W*p/dpr)+'px'; cvs.style.height = (H*p/dpr)+'px';
   lit.width = W*p; lit.height = H*p;
-  glow.width = W*p; glow.height = H*p;
-  const lc = lit.getContext('2d'), gc = glow.getContext('2d'), r = p*0.40;
+  const lc = lit.getContext('2d'), r = p*0.40;
   ctx.fillStyle = '#05060a'; ctx.fillRect(0,0,cvs.width,cvs.height);
   ctx.fillStyle = '#10131a'; ctx.beginPath();
   for (let y=0;y<H;y++) for (let x=0;x<W;x++){ const i=(y*W+x)*3; if (!(fb[i]|fb[i+1]|fb[i+2])){ ctx.moveTo((x+.5)*p+r,(y+.5)*p); ctx.arc((x+.5)*p,(y+.5)*p,r*.8,0,6.2832); } }
   ctx.fill();
   lc.clearRect(0,0,lit.width,lit.height);
-  gc.clearRect(0,0,glow.width,glow.height);
   for (let y=0;y<H;y++) for (let x=0;x<W;x++){
     const i=(y*W+x)*3; if (!(fb[i]|fb[i+1]|fb[i+2])) continue;
-    const color = `rgb(${fb[i]},${fb[i+1]},${fb[i+2]})`;
-    lc.fillStyle = color;
+    lc.fillStyle = `rgb(${fb[i]},${fb[i+1]},${fb[i+2]})`;
     lc.beginPath(); lc.arc((x+.5)*p,(y+.5)*p,r,0,6.2832); lc.fill();
-    if (fb[i] !== GREEN[0] || fb[i+1] !== GREEN[1] || fb[i+2] !== GREEN[2]){
-      gc.fillStyle = color;
-      gc.beginPath(); gc.arc((x+.5)*p,(y+.5)*p,r,0,6.2832); gc.fill();
-    }
   }
-  if ('filter' in ctx){ ctx.filter = `blur(${p*0.55}px)`; ctx.globalAlpha = .55; ctx.drawImage(glow,0,0); ctx.filter='none'; ctx.globalAlpha = 1; }
+  if ('filter' in ctx){ ctx.filter = `blur(${p*0.55}px)`; ctx.globalAlpha = .55; ctx.drawImage(lit,0,0); ctx.filter='none'; ctx.globalAlpha = 1; }
   ctx.drawImage(lit,0,0);
 }
 addEventListener('resize', paint);
@@ -1386,10 +1378,10 @@ function drawRadar(t){
     radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*(1.1 + infos.length*0.85) });
   }
 
-  const hudX = Math.max(14, safe.left + 12) * d;
-  const hudY = Math.max(12, safe.top + 8) * d;
-  const hudFont = Math.max(11*d, R*0.028);
-  c.font = mono(hudFont); c.fillStyle = `rgba(${GL},.75)`; c.textAlign = 'left'; c.textBaseline = 'top';
+  const hudX = Math.round(Math.max(14, safe.left + 12) * d);
+  const hudY = Math.round(Math.max(12, safe.top + 8) * d);
+  const hudFont = Math.round(Math.max(11*d, R*0.028));
+  c.font = mono(hudFont); c.fillStyle = `rgb(${GL})`; c.textAlign = 'left'; c.textBaseline = 'top';
   const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
   c.fillText(hud, hudX, hudY);
 
