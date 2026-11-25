@@ -23,7 +23,7 @@
   #gear { position:fixed; top:max(10px, calc(var(--sat) + 4px)); right:max(12px, calc(var(--sar) + 8px)); z-index:5; background:none; border:0; color:#fff; opacity:.35; font-size:24px; padding:8px; line-height:1; cursor:pointer; }
   #gear:hover,#gear:focus { opacity:.85; }
 
-  #radar { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:3; background:#010805; cursor:pointer; }
+  #radar { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:3; background:#010805; cursor:pointer; touch-action:none; }
   #dock { position:fixed; left:50%; transform:translateX(-50%); bottom:max(10px, var(--sab)); z-index:5; display:none; gap:10px; }
   #dock button { font:13px system-ui,sans-serif; color:#cfd6e6; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 16px; opacity:.3; cursor:pointer; letter-spacing:.02em; }
   #dock button.on { opacity:.75; border-color:rgba(255,255,255,.45); }
@@ -520,10 +520,8 @@ function landed(){
 
 async function fetchFollow(){
   const cs = cfg.follow; if (!cs) return;
-  // 1. Chercher d'abord dans les avions déjà chargés sur le radar local
   let ac = planes.find(a => (a.flight || '').trim().toUpperCase() === cs) || null;
 
-  // 2. Sinon interroger le relais Worker puis airplanes.live en direct
   if (!ac){
     const urls = [
       `${RELAY_URL}/v2/callsign/${encodeURIComponent(cs)}`,
@@ -1231,7 +1229,7 @@ function drawRadar(t){
   const kmx = 111.32*Math.cos(cfg.lat*Math.PI/180), kmy = 110.57, now = Date.now();
   const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
 
-  // Satellites (Option 2 : visible dans le ciel, ou Option 1 : trace au sol)
+  // Satellites
   const visibleSats = getVisibleSatellites(new Date(now), cx, cy, R);
   if (visibleSats.length){
     c.save();
@@ -1335,6 +1333,67 @@ function drawRadar(t){
   c.textBaseline = 'alphabetic';
 }
 
+/* ============ Zoom radar : pincement à 2 doigts (mobile) & molette/trackpad (PC) ============ */
+let pinchStartDist = 0, pinchStartRadius = 30, isPinching = false, pinchCooldown = 0, zoomFetchT = null;
+
+function applyRadarZoom(nextRadius, debounceMs = 0){
+  const clamped = Math.round(Math.min(200, Math.max(5, nextRadius)));
+  if (clamped === cfg.radius) return;
+  cfg.radius = clamped;
+  saveCfg();
+  clearTimeout(zoomFetchT);
+  if (debounceMs > 0){
+    zoomFetchT = setTimeout(() => tick(), debounceMs);
+  } else {
+    tick();
+  }
+}
+
+function touchDist(touches){
+  return Math.hypot(
+    touches[0].clientX - touches[1].clientX,
+    touches[0].clientY - touches[1].clientY
+  );
+}
+
+rcv.addEventListener('touchstart', e => {
+  if (e.touches.length === 2){
+    e.preventDefault();
+    clearTimeout(radarClickT);
+    isPinching = true;
+    pinchStartDist = Math.max(10, touchDist(e.touches));
+    pinchStartRadius = cfg.radius;
+  }
+}, { passive: false });
+
+rcv.addEventListener('touchmove', e => {
+  if (isPinching && e.touches.length === 2){
+    e.preventDefault();
+    const dist = Math.max(10, touchDist(e.touches));
+    const ratio = pinchStartDist / dist;
+    const nextRadius = Math.round(Math.min(200, Math.max(5, pinchStartRadius * ratio)));
+    if (nextRadius !== cfg.radius){
+      cfg.radius = nextRadius;
+    }
+  }
+}, { passive: false });
+
+rcv.addEventListener('touchend', e => {
+  if (isPinching && e.touches.length < 2){
+    isPinching = false;
+    pinchCooldown = Date.now() + 400;
+    saveCfg();
+    tick();
+  }
+});
+
+rcv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = Math.max(-120, Math.min(120, e.deltaY));
+  const factor = Math.exp(delta * (e.ctrlKey ? 0.01 : 0.0022));
+  applyRadarZoom(cfg.radius * factor, 300);
+}, { passive: false });
+
 function radarClick(e){
   const d = window.devicePixelRatio || 1, x = e.offsetX*d, y = e.offsetY*d;
   let best = null, bd = 1e9;
@@ -1352,7 +1411,12 @@ function radarClick(e){
   }
 }
 let radarClickT = null;
-rcv.addEventListener('click', e => { const pt = { offsetX:e.offsetX, offsetY:e.offsetY }; clearTimeout(radarClickT); radarClickT = setTimeout(() => radarClick(pt), 280); });
+rcv.addEventListener('click', e => {
+  if (isPinching || Date.now() < pinchCooldown) return;
+  const pt = { offsetX:e.offsetX, offsetY:e.offsetY };
+  clearTimeout(radarClickT);
+  radarClickT = setTimeout(() => radarClick(pt), 280);
+});
 rcv.addEventListener('dblclick', () => { clearTimeout(radarClickT); toggleFS(); });
 
 let idleT;
