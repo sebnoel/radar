@@ -1381,22 +1381,29 @@ function drawRadar(t){
   }
 
   c.shadowBlur = 0;
-  const hudX = Math.max(14, safe.left + 12) * d;
-  const hudY = Math.max(12, safe.top + 8) * d;
-  const hudFont = Math.max(12*d, R*0.03);
-  c.font = mono(hudFont);
-  c.fillStyle = `rgba(${GL}, .92)`;
+  const hudX = Math.round(Math.max(14, safe.left + 12) * d);
+  const hudY = Math.round(Math.max(12, safe.top + 8) * d);
+  const hudFont = Math.round(Math.max(13 * d, R * 0.032));
+  c.font = `600 ${hudFont}px -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
   c.textAlign = 'left';
   c.textBaseline = 'top';
+  c.lineJoin = 'round';
+  c.lineWidth = Math.max(2, Math.round(2.5 * d));
+  c.strokeStyle = '#010805';
+
   const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
-  c.fillText(hud, Math.round(hudX), Math.round(hudY));
+  c.strokeText(hud, hudX, hudY);
+  c.fillStyle = '#7dff9e';
+  c.fillText(hud, hudX, hudY);
 
   if (cfg.satMode !== 'off'){
-    c.fillStyle = visibleSats.length ? 'rgba(56, 189, 248, 0.95)' : 'rgba(56, 189, 248, 0.55)';
+    const satY = Math.round(hudY + hudFont * 1.45);
     const satHud = cfg.satMode === 'sky'
       ? `Satellites : ${visibleSats.length} visible(s) (élév. ≥ 15°)`
       : `Satellites : ${visibleSats.length} (trace au sol ≤ ${cfg.radius} km)`;
-    c.fillText(satHud, Math.round(hudX), Math.round(hudY + hudFont * 1.4));
+    c.strokeText(satHud, hudX, satY);
+    c.fillStyle = visibleSats.length ? '#38bdf8' : 'rgba(56, 189, 248, 0.65)';
+    c.fillText(satHud, hudX, satY);
   }
 
   if (cfg.showMap){
