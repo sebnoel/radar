@@ -20,7 +20,7 @@
   #led { display:block; background:#05060a; image-rendering:pixelated; }
 
   body.idle, body.idle * { cursor:none !important; }
-  #gear { position:fixed; top:max(10px, calc(var(--sat) + 4px)); right:max(12px, calc(var(--sar) + 8px)); z-index:5; background:none; border:0; color:#fff; opacity:.35; font-size:24px; padding:8px; line-height:1; cursor:pointer; }
+  #gear { position:fixed; top:max(46px, calc(var(--sat) + 38px)); right:max(12px, calc(var(--sar) + 8px)); z-index:5; background:none; border:0; color:#fff; opacity:.35; font-size:24px; padding:8px; line-height:1; cursor:pointer; }
   #gear:hover,#gear:focus { opacity:.85; }
 
   #radar { position:fixed; inset:0; width:100%; height:100%; display:none; z-index:3; background:#010805; cursor:pointer; touch-action:none; }
@@ -1173,7 +1173,7 @@ function drawRadar(t){
   const c = rctx, d = window.devicePixelRatio || 1, W = rcv.width, H = rcv.height;
   if (!W || !H) return;
   const safe = getSafeInsets();
-  const topPad = (safe.top + (cfg.satMode !== 'off' ? 48 : 34)) * d;
+  const topPad = (safe.top + (cfg.satMode !== 'off' ? 84 : 70)) * d;
   const botPad = (safe.bottom + 18) * d;
   const sidePad = (Math.max(safe.left, safe.right) + 16) * d;
 
@@ -1381,29 +1381,19 @@ function drawRadar(t){
   }
 
   c.shadowBlur = 0;
-  const hudX = Math.round(Math.max(14, safe.left + 12) * d);
-  const hudY = Math.round(Math.max(12, safe.top + 8) * d);
-  const hudFont = Math.round(Math.max(13 * d, R * 0.032));
-  c.font = `600 ${hudFont}px -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
-  c.textAlign = 'left';
-  c.textBaseline = 'top';
-  c.lineJoin = 'round';
-  c.lineWidth = Math.max(2, Math.round(2.5 * d));
-  c.strokeStyle = '#010805';
-
+  const hudX = Math.max(14, safe.left + 12) * d;
+  const hudY = Math.max(48, safe.top + 42) * d;
+  const hudFont = Math.max(11*d, R*0.028);
+  c.font = mono(hudFont); c.fillStyle = `rgba(${GL},.85)`; c.textAlign = 'left'; c.textBaseline = 'top';
   const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
-  c.strokeText(hud, hudX, hudY);
-  c.fillStyle = '#7dff9e';
   c.fillText(hud, hudX, hudY);
 
   if (cfg.satMode !== 'off'){
-    const satY = Math.round(hudY + hudFont * 1.45);
+    c.fillStyle = visibleSats.length ? 'rgba(56, 189, 248, 0.9)' : 'rgba(56, 189, 248, 0.45)';
     const satHud = cfg.satMode === 'sky'
       ? `Satellites : ${visibleSats.length} visible(s) (élév. ≥ 15°)`
       : `Satellites : ${visibleSats.length} (trace au sol ≤ ${cfg.radius} km)`;
-    c.strokeText(satHud, hudX, satY);
-    c.fillStyle = visibleSats.length ? '#38bdf8' : 'rgba(56, 189, 248, 0.65)';
-    c.fillText(satHud, hudX, satY);
+    c.fillText(satHud, hudX, hudY + hudFont * 1.35);
   }
 
   if (cfg.showMap){
