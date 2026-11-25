@@ -1178,6 +1178,7 @@ function drawRadar(t){
   const sidePad = (Math.max(safe.left, safe.right) + 16) * d;
 
   c.setTransform(1,0,0,1,0,0);
+  c.shadowBlur = 0;
   c.fillStyle = '#010805'; c.fillRect(0,0,W,H);
   const cx = W/2;
   const cy = topPad + (H - topPad - botPad)/2;
@@ -1373,24 +1374,29 @@ function drawRadar(t){
     c.font = mono(fs); c.fillStyle = inAlert ? '#ffcf6e' : (followed ? '#ffffff' : '#e8ffe0');
     c.shadowColor = '#000'; c.shadowBlur = 4*d;
     const lx = px + s*1.4, ly = py - fs*0.15; c.fillText(cs, lx, ly);
-    if (infos.length){ c.font = mono(fs*0.75); c.fillStyle = inAlert ? 'rgba(255, 207, 110, 0.92)' : `rgba(${GL},.95)`; infos.forEach((t,i) => c.fillText(t, lx, ly + fs*(0.95 + i*0.85))); } c.shadowBlur = 0;
+    if (infos.length){ c.font = mono(fs*0.75); c.fillStyle = inAlert ? 'rgba(255, 207, 110, 0.92)' : `rgba(${GL},.95)`; infos.forEach((t,i) => c.fillText(t, lx, ly + fs*(0.95 + i*0.85))); }
+    c.shadowBlur = 0;
     c.font = mono(fs);
     radarHits.push({ hex:p.hex, x:px, y:py, r:Math.max(30*d, s*2.5), lx, ly:ly-fs*0.6, lw:c.measureText(cs).width, lh:fs*(1.1 + infos.length*0.85) });
   }
 
-  const hudX = Math.round(Math.max(14, safe.left + 12) * d);
-  const hudY = Math.round(Math.max(12, safe.top + 8) * d);
-  const hudFont = Math.round(Math.max(11*d, R*0.028));
-  c.font = mono(hudFont); c.fillStyle = `rgb(${GL})`; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.shadowBlur = 0;
+  const hudX = Math.max(14, safe.left + 12) * d;
+  const hudY = Math.max(12, safe.top + 8) * d;
+  const hudFont = Math.max(12*d, R*0.03);
+  c.font = mono(hudFont);
+  c.fillStyle = `rgba(${GL}, .92)`;
+  c.textAlign = 'left';
+  c.textBaseline = 'top';
   const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
-  c.fillText(hud, hudX, hudY);
+  c.fillText(hud, Math.round(hudX), Math.round(hudY));
 
   if (cfg.satMode !== 'off'){
-    c.fillStyle = visibleSats.length ? 'rgba(56, 189, 248, 0.9)' : 'rgba(56, 189, 248, 0.45)';
+    c.fillStyle = visibleSats.length ? 'rgba(56, 189, 248, 0.95)' : 'rgba(56, 189, 248, 0.55)';
     const satHud = cfg.satMode === 'sky'
       ? `Satellites : ${visibleSats.length} visible(s) (élév. ≥ 15°)`
       : `Satellites : ${visibleSats.length} (trace au sol ≤ ${cfg.radius} km)`;
-    c.fillText(satHud, hudX, hudY + hudFont * 1.35);
+    c.fillText(satHud, Math.round(hudX), Math.round(hudY + hudFont * 1.4));
   }
 
   if (cfg.showMap){
