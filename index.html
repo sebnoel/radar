@@ -520,11 +520,24 @@ function landed(){
 
 async function fetchFollow(){
   const cs = cfg.follow; if (!cs) return;
-  let ac = null;
-  try {
-    const j = await getJSON(`${RELAY_URL}/v2/callsign/${encodeURIComponent(cs)}`);
-    ac = (j.ac || j.aircraft || []).find(a => typeof a.lat === 'number' && typeof a.lon === 'number') || null;
-  } catch(e){ return; }
+  // 1. Chercher d'abord dans les avions déjà chargés sur le radar local
+  let ac = planes.find(a => (a.flight || '').trim().toUpperCase() === cs) || null;
+
+  // 2. Sinon interroger le relais Worker puis airplanes.live en direct
+  if (!ac){
+    const urls = [
+      `${RELAY_URL}/v2/callsign/${encodeURIComponent(cs)}`,
+      `https://api.airplanes.live/v2/callsign/${encodeURIComponent(cs)}`
+    ];
+    for (const u of urls){
+      try {
+        const j = await getJSON(u);
+        ac = (j.ac || j.aircraft || []).find(a => typeof a.lat === 'number' && typeof a.lon === 'number') || null;
+        if (ac) break;
+      } catch(e){}
+    }
+  }
+
   if (ac){
     ac._d = km(cfg.lat, cfg.lon, ac.lat, ac.lon);
     const onGround = ac.alt_baro === 'ground' || (typeof ac.alt_baro === 'number' && ac.alt_baro < 100 && (ac.gs||0) < 60);
@@ -595,7 +608,6 @@ function render(){
 }
 
 async function tick(){
-  if (cfg.follow) await fetchFollow();
   try {
     const ac = await fetchPlanes();
     planes = ac.filter(a => typeof a.lat==='number' && typeof a.lon==='number')
@@ -610,9 +622,11 @@ async function tick(){
     status(`${planes.length} avion(s) • source ${lastSource} • ${hhmm(new Date())}`);
   } catch(e){
     planes = []; status('Erreur réseau : ' + e.message); console.error(e);
+    if (cfg.follow) await fetchFollow();
     if (pinned()) render(); else { updateButtons(); showError(e.message); }
     return;
   }
+  if (cfg.follow) await fetchFollow();
   render();
 }
 
@@ -650,7 +664,6 @@ async function ensureSatellites(){
 function getVisibleSatellites(nowDate, cx, cy, R){
   if (cfg.satMode === 'off' || !window.satellite || !satRecords.length) return [];
   const satLib = window.satellite;
-  const gmst = satLib.gstime(nowDate);
   const observerGd = {
     longitude: satLib.degreesToRadians(cfg.lon),
     latitude: satLib.degreesToRadians(cfg.lat),
@@ -703,7 +716,6 @@ function getVisibleSatellites(nowDate, cx, cy, R){
   const projNow = projectAt(nowDate);
   const projNext = projectAt(new Date(nowDate.getTime() + 3000));
 
-  // Échantillons d'orbite (-60s..+60s en mode ciel, -12s..+12s en mode trace au sol)
   const stepSec = cfg.satMode === 'sky' ? 15 : 3;
   const spanSteps = 4;
   const pastProjs = [];
@@ -1047,11 +1059,9 @@ function drawSatelliteIcon(c, sx, sy, s, angle, d){
   c.translate(sx, sy);
   c.rotate(angle);
 
-  // Halo cyan
   c.fillStyle = 'rgba(56, 189, 248, 0.22)';
   c.beginPath(); c.arc(0, 0, s * 1.9, 0, 6.2832); c.fill();
 
-  // Panneaux solaires gauche & droit
   c.fillStyle = '#38bdf8';
   c.strokeStyle = '#e0f2fe';
   c.lineWidth = 1.1 * d;
@@ -1065,7 +1075,6 @@ function drawSatelliteIcon(c, sx, sy, s, angle, d){
     c.stroke();
   }
 
-  // Corps central du satellite
   c.fillStyle = '#f0f9ff';
   c.fillRect(-s * 0.28, -s * 0.28, s * 0.56, s * 0.56);
   c.strokeRect(-s * 0.28, -s * 0.28, s * 0.56, s * 0.56);
