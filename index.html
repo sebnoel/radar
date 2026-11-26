@@ -423,7 +423,7 @@ const routeCache = {};
 let planes = [], idx = 0, timer = null, rotTimer = null, lastSource = '';
 
 /* ---- Décalage temporaire de la carte (panoramique) ---- */
-let panLat = 0, panLon = 0;
+let panLat = 0, panLon = 0, panAnim = null;
 const viewLat = () => Math.max(-85, Math.min(85, cfg.lat + panLat));
 const viewLon = () => {
   let l = cfg.lon + panLon;
@@ -436,14 +436,20 @@ function updateRecenterBtn(){
   $('recenter').hidden = !(view === 'radar' && panned);
 }
 function resetPan(){
+  panAnim = null;
   panLat = 0;
   panLon = 0;
   updateRecenterBtn();
 }
+function smoothRecenter(){
+  if (Math.abs(panLat) < 1e-4 && Math.abs(panLon) < 1e-4){ resetPan(); return; }
+  panAnim = { startLat: panLat, startLon: panLon, t0: performance.now(), dur: 450 };
+  $('recenter').hidden = true;
+  tick();
+}
 $('recenter').onclick = e => {
   e.stopPropagation();
-  resetPan();
-  tick();
+  smoothRecenter();
 };
 
 function status(m){ $('status').textContent = m; }
@@ -458,7 +464,7 @@ const hhmm = d => d.toTimeString().slice(0,5);
 async function getJSON(url, opt){ const r = await fetch(url, opt); if(!r.ok) throw new Error(r.status); return r.json(); }
 
 async function fetchPlanes(){
-  const cLat = viewLat(), cLon = viewLon();
+  const cLat = panAnim ? cfg.lat : viewLat(), cLon = panAnim ? cfg.lon : viewLon();
   if (new URLSearchParams(location.search).has('demo')) return demoPlanes(cLat, cLon);
   const nm = Math.min(250, Math.max(1, cfg.radius/1.852)).toFixed(1);
   const errs = [];
@@ -636,7 +642,7 @@ function render(){
 }
 
 async function tick(){
-  const cLat = viewLat(), cLon = viewLon();
+  const cLat = panAnim ? cfg.lat : viewLat(), cLon = panAnim ? cfg.lon : viewLon();
   try {
     const ac = await fetchPlanes();
     planes = ac.filter(a => typeof a.lat==='number' && typeof a.lon==='number')
@@ -1092,7 +1098,19 @@ if ('ResizeObserver' in window){
   new ResizeObserver(() => { if (view === 'radar') sizeRadar(); }).observe(rcv);
 }
 
-function radarLoop(t){ if (view !== 'radar') return; sizeRadar(); drawRadar(t); requestAnimationFrame(radarLoop); }
+function stepPanAnim(){
+  if (!panAnim) return;
+  const k = Math.min(1, (performance.now() - panAnim.t0) / panAnim.dur);
+  const ease = 1 - Math.pow(1 - k, 3); // Ease-out cubic
+  if (k >= 1){
+    resetPan();
+  } else {
+    panLat = panAnim.startLat * (1 - ease);
+    panLon = panAnim.startLon * (1 - ease);
+  }
+}
+
+function radarLoop(t){ if (view !== 'radar') return; stepPanAnim(); sizeRadar(); drawRadar(t); requestAnimationFrame(radarLoop); }
 
 const PLANE = [[0,-1],[.12,-.55],[.95,.05],[.95,.22],[.12,0],[.1,.65],[.4,.85],[.4,.98],[0,.88],[-.4,.98],[-.4,.85],[-.1,.65],[-.12,0],[-.95,.22],[-.95,.05],[-.12,-.55]];
 const GL = '90,255,130';
@@ -1425,6 +1443,7 @@ function applyRadarZoom(nextRadius, debounceMs = 300){
 }
 
 function panByPixels(dxPx, dyPx){
+  panAnim = null;
   const d = window.devicePixelRatio || 1;
   const safe = getSafeInsets();
   const isLandscape = rcv.width >= rcv.height;
