@@ -1,0 +1,11 @@
+name = "radar-relay"
+main = "worker.js"
+compatibility_date = "2026-11-26"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "RADAR_KV"
+id = "4b60f6743ced4edabe78d1d84242f32d"
+
+[triggers]
+crons = ["* * * * *"]
