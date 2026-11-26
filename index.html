@@ -34,7 +34,7 @@
   #recenter:hover, #recenter:focus-visible { background:rgba(18,56,32,.95); border-color:rgba(90,255,130,.85); }
 
   #orientBtn { position:fixed; right:max(14px, calc(var(--sar) + 12px)); bottom:max(26px, calc(var(--sab) + 20px)); z-index:5; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#cfd6e6; background:rgba(10,32,18,.78); border:1px solid rgba(90,255,130,.32); cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.6); transition:background .15s, border-color .15s, color .15s; padding:0; }
-  #orientBtn[hidden], #orientBtn [hidden] { display:none !important; }
+  #orientBtn[hidden] { display:none; }
   #orientBtn:hover, #orientBtn:focus-visible { background:rgba(18,56,32,.95); border-color:rgba(90,255,130,.75); color:#e8ffe0; }
   #orientBtn.on { color:#e8ffe0; background:rgba(18,56,32,.92); border-color:rgba(90,255,130,.85); }
 
@@ -102,18 +102,7 @@
   <button id="bFollow" type="button"></button>
 </div>
 <button id="recenter" type="button" hidden>Recentrer</button>
-<button id="orientBtn" type="button" hidden aria-label="Activer l'orientation boussole" title="Activer l'orientation boussole">
-  <svg id="iconCompass" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9.5"/>
-    <polygon points="16.2 7.8 13.8 13.8 7.8 16.2 10.2 10.2 16.2 7.8" fill="currentColor" stroke="none"/>
-    <circle cx="12" cy="12" r="1.2" fill="#0a2012" stroke="none"/>
-  </svg>
-  <svg id="iconNorth" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
-    <path d="M9.5 8.5V3.5L14.5 8.5V3.5" stroke-width="2"/>
-    <polyline points="8.5 15 12 11.5 15.5 15"/>
-    <line x1="12" y1="11.5" x2="12" y2="21"/>
-  </svg>
-</button>
+<button id="orientBtn" type="button" hidden aria-label="Activer l'orientation boussole" title="Activer l'orientation boussole"></button>
 <button id="gear" aria-label="Paramètres">⚙</button>
 
 <div id="settings">
@@ -1084,15 +1073,27 @@ let compassMode = false;
 let targetHeadingDeg = 0;
 let currentHeadingRad = 0;
 
+const SVG_COMPASS = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="9.5"/>
+  <polygon points="16.2 7.8 13.8 13.8 7.8 16.2 10.2 10.2 16.2 7.8" fill="currentColor" stroke="none"/>
+  <circle cx="12" cy="12" r="1.2" fill="#0a2012" stroke="none"/>
+</svg>`;
+
+const SVG_NORTH = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M9.5 8.5V3.5L14.5 8.5V3.5"/>
+  <polyline points="8.5 15 12 11.5 15.5 15"/>
+  <line x1="12" y1="11.5" x2="12" y2="21"/>
+</svg>`;
+
 function updateOrientUI(){
   const btn = $('orientBtn');
   btn.hidden = (view !== 'radar');
   btn.classList.toggle('on', compassMode);
-  $('iconCompass').hidden = compassMode;
-  $('iconNorth').hidden = !compassMode;
-  btn.title = compassMode ? 'Revenir au Nord en haut' : 'Activer l\'orientation boussole';
+  btn.innerHTML = compassMode ? SVG_NORTH : SVG_COMPASS;
+  btn.title = compassMode ? 'Revenir au Nord en haut' : "Activer l'orientation boussole";
   btn.setAttribute('aria-label', btn.title);
 }
+updateOrientUI();
 
 function onDeviceOrientation(e){
   if (!compassMode) return;
@@ -1109,32 +1110,28 @@ function onDeviceOrientation(e){
 }
 
 async function toggleCompassMode(){
-  if (!compassMode){
+  compassMode = !compassMode;
+  updateOrientUI();
+
+  if (compassMode){
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
       try {
         const perm = await DeviceOrientationEvent.requestPermission();
-        if (perm !== 'granted'){
-          status('Autorisation boussole refusée');
-          return;
-        }
+        if (perm !== 'granted') status('Autorisation boussole refusée dans Safari');
       } catch(e){
         status('Boussole indisponible : ' + e.message);
-        return;
       }
     }
-    compassMode = true;
     if ('ondeviceorientationabsolute' in window){
       window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
     } else {
       window.addEventListener('deviceorientation', onDeviceOrientation, true);
     }
   } else {
-    compassMode = false;
     targetHeadingDeg = 0;
     window.removeEventListener('deviceorientationabsolute', onDeviceOrientation, true);
     window.removeEventListener('deviceorientation', onDeviceOrientation, true);
   }
-  updateOrientUI();
 }
 
 function stepHeadingAnim(){
