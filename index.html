@@ -273,6 +273,7 @@ const fb = new Uint8Array(W*H*3);
 const FONT = [0,0,0,0,0,0,0,95,0,0,0,7,0,7,0,20,127,20,127,20,36,42,127,42,18,35,19,8,100,98,54,73,86,32,80,0,8,7,3,0,0,28,34,65,0,0,65,34,28,0,42,28,127,28,42,8,8,62,8,8,0,128,112,48,0,8,8,8,8,8,0,0,96,96,0,32,16,8,4,2,62,81,73,69,62,0,66,127,64,0,114,73,73,73,70,33,65,73,77,51,24,20,18,127,16,39,69,69,69,57,60,74,73,73,49,65,33,17,9,7,54,73,73,73,54,70,73,73,41,30,0,0,20,0,0,0,64,52,0,0,0,8,20,34,65,20,20,20,20,20,0,65,34,20,8,2,1,89,9,6,62,65,93,89,78,124,18,17,18,124,127,73,73,73,54,62,65,65,65,34,127,65,65,65,62,127,73,73,73,65,127,9,9,9,1,62,65,65,81,115,127,8,8,8,127,0,65,127,65,0,32,64,65,63,1,127,8,20,34,65,127,64,64,64,64,127,2,28,2,127,127,4,8,16,127,62,65,65,65,62,127,9,9,9,6,62,65,81,33,94,127,9,25,41,70,38,73,73,73,50,3,1,127,1,3,63,64,64,64,63,31,32,64,32,31,63,64,56,64,63,99,20,8,20,99,3,4,120,4,3,97,89,73,77,67,0,127,65,65,65,2,4,8,16,32,0,65,65,65,127,4,2,1,2,4,64,64,64,64,64,0,3,7,8,0,32,84,84,120,64,127,40,68,68,56,56,68,68,68,40,56,68,68,40,127,56,84,84,84,24,0,8,126,9,2,24,164,164,156,120,127,8,4,4,120,0,68,125,64,0,32,64,64,61,0,127,16,40,68,0,0,65,127,64,0,124,4,120,4,120,124,8,4,4,120,56,68,68,68,56,252,24,36,36,24,24,36,36,24,252,124,8,4,4,8,72,84,84,84,36,4,4,63,68,36,60,64,64,32,124,28,32,64,32,28,60,64,48,64,60,68,40,16,40,68,76,144,144,144,124,68,100,84,76,68,0,8,54,65,0,0,0,119,0,0,0,65,54,8,0,2,1,2,4,2];
 
 const WHITE=[244,247,255], GREEN=[53,224,107];
+const CYAN=[56,189,248], SKY=[186,230,253], ICE=[125,211,252];
 const clean = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e]/g,'?');
 function put(x,y,c){ if(x<0||y<0||x>=W||y>=H) return; const i=(y*W+x)*3; fb[i]=c[0]; fb[i+1]=c[1]; fb[i+2]=c[2]; }
 function rect(x,y,w,h,c){ for(let j=0;j<h;j++) for(let i=0;i<w;i++) put(x+i,y+j,c); }
@@ -321,6 +322,28 @@ function loadLogo(icao){
 
 const LX=4, LY=3, LS=32;
 function drawLogo(icao){
+  if (icao === '__SAT__'){
+    const bg=[9,30,56], panel=[29,125,184], cell=[56,189,248], body=[224,242,254], wave=[125,211,252];
+    rect(LX,LY,LS,LS,bg);
+    // Étoiles de fond
+    [[4,5],[27,4],[6,26],[26,27],[28,13]].forEach(([sx,sy]) => put(LX+sx, LY+sy, [110,155,205]));
+    // Panneaux solaires gauche & droite
+    rect(LX+2, LY+12, 8, 8, panel);
+    rect(LX+22, LY+12, 8, 8, panel);
+    for (let x=3; x<=8; x+=3){ rect(LX+x, LY+13, 2, 6, cell); rect(LX+x+20, LY+13, 2, 6, cell); }
+    // Bras de liaison
+    rect(LX+10, LY+15, 2, 2, body);
+    rect(LX+20, LY+15, 2, 2, body);
+    // Corps central du satellite
+    rect(LX+12, LY+11, 8, 10, body);
+    rect(LX+14, LY+13, 4, 6, panel);
+    // Antenne + ondes vers la Terre
+    rect(LX+15, LY+21, 2, 3, body);
+    rect(LX+13, LY+25, 6, 1, wave);
+    rect(LX+11, LY+27, 10, 1, wave);
+    rect(LX+9, LY+29, 14, 1, cell);
+    return;
+  }
   if (!icao){
     const bg=[28,79,214], fg=[159,192,255];
     rect(LX,LY,LS,LS,bg);
@@ -347,19 +370,20 @@ function drawLogo(icao){
   text(code, LX+Math.round((LS-w)/2), LY+Math.round((LS-h)/2), fg, sc);
 }
 
-const scene = { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0 };
+const scene = { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0, barColor:GREEN, c1:WHITE, c2:WHITE, c3:WHITE, c4:WHITE, c5l:WHITE, c5r:WHITE, c6:WHITE };
 const TX = 40, TR = 124, XL = 4, XR = 124;
 function compose(){
   fb.fill(0);
   drawLogo(scene.logo);
-  text(fit(scene.l1,14), TX, 3);
-  text(fit(scene.l2,14), TX, 14);
-  if (scene.bar>0) rect(TX, 24, Math.round((TR-TX)*Math.min(1,scene.bar)), 2, GREEN);
-  text(fit(scene.l3,14), TX, 28);
-  text(fit(scene.l4,20), XL, 39);
-  text(fit(scene.l5l, scene.l5r ? 12 : 20), XL, 50);
-  textR(fit(scene.l5r,9), XR, 50);
-  text(fit(scene.l6,20), XL, 61);
+  text(fit(scene.l1,14), TX, 3, scene.c1);
+  text(fit(scene.l2,14), TX, 14, scene.c2);
+  if (scene.bar>0) rect(TX, 24, Math.round((TR-TX)*Math.min(1,scene.bar)), 2, scene.barColor);
+  text(fit(scene.l3,14), TX, 28, scene.c3);
+  text(fit(scene.l4,20), XL, 39, scene.c4);
+  const l5Max = scene.l5r ? Math.max(8, 20 - clean(scene.l5r).length) : 20;
+  text(fit(scene.l5l, l5Max), XL, 50, scene.c5l);
+  textR(fit(scene.l5r,10), XR, 50, scene.c5r);
+  text(fit(scene.l6,20), XL, 61, scene.c6);
 }
 
 const cvs = $('led'), ctx = cvs.getContext('2d');
@@ -459,7 +483,7 @@ $('recenter').onclick = e => {
 };
 
 function status(m){ $('status').textContent = m; }
-function show(o){ Object.assign(scene, { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0 }, o); paint(); }
+function show(o){ Object.assign(scene, { logo:'', l1:'', l2:'', l3:'', l4:'', l5l:'', l5r:'', l6:'', bar:0, barColor:GREEN, c1:WHITE, c2:WHITE, c3:WHITE, c4:WHITE, c5l:WHITE, c5r:WHITE, c6:WHITE }, o); paint(); }
 
 function km(lat1,lon1,lat2,lon2){
   const R=6371, r=Math.PI/180, dLat=(lat2-lat1)*r, dLon=(lon2-lon1)*r;
@@ -628,6 +652,59 @@ function showPlane(p){
          l5l:altTxt, l5r:`ETA ${eta}`, l6:toGo, bar });
 }
 
+function satCategory(name){
+  const n = String(name || '').toUpperCase();
+  if (/\bISS\b|ZARYA|TIANGONG|CSS/.test(n)) return 'Space Station';
+  if (n.includes('STARLINK')) return 'Starlink';
+  if (n.includes('ONEWEB')) return 'OneWeb';
+  if (n.includes('IRIDIUM')) return 'Iridium';
+  if (n.includes('GALILEO') || n.includes('GPS') || n.includes('GLONASS') || n.includes('BEIDOU')) return 'Navigation';
+  if (n.includes('NOAA') || n.includes('METEOR') || n.includes('METOP') || n.includes('GOES')) return 'Weather Sat';
+  if (n.includes('DEB') || n.includes('R/B')) return 'Space Debris';
+  return 'Satellite';
+}
+
+function showSatellite(rec){
+  const d = getSatelliteDetails(rec, new Date());
+  if (!d){
+    show({
+      logo:'__SAT__', l1:satCategory(rec.name), l2:rec.name,
+      l3:`NORAD ${d?.norad || String(rec.satrec?.satnum || '').trim()}`,
+      l4:'Below horizon', l5l:'Pass completed',
+      c1:CYAN, c2:SKY, c3:ICE, c4:WHITE, c5l:ICE
+    });
+    return;
+  }
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  const card = dirs[Math.round(d.azDeg / 45) % 8];
+  const azTxt = String(Math.round(d.azDeg)).padStart(3, '0') + 'd';
+  const elTxt = Math.round(d.elevDeg) + 'd';
+  const losTxt = d.remSec != null
+    ? `LOS ${String(Math.floor(d.remSec / 60)).padStart(2, '0')}m${String(d.remSec % 60).padStart(2, '0')}s`
+    : 'In orbit';
+  const bar = d.remSec != null ? Math.max(0.05, Math.min(1, d.remSec / 600)) : Math.max(0.05, d.elevDeg / 90);
+
+  show({
+    logo: '__SAT__',
+    l1: satCategory(rec.name),
+    l2: rec.name,
+    l3: `NORAD ${d.norad} ${d.inclDeg.toFixed(0)}d`,
+    l4: `Alt ${Math.round(d.altKm)}km Per ${Math.round(d.periodMin)}m`,
+    l5l: `El ${elTxt} ${card} ${azTxt}`,
+    l5r: `${Math.round(d.speedKmh)}km/h`,
+    l6: `Dist ${Math.round(d.rangeKm)}km ${losTxt}`,
+    bar,
+    barColor: CYAN,
+    c1: CYAN,
+    c2: SKY,
+    c3: ICE,
+    c4: WHITE,
+    c5l: SKY,
+    c5r: CYAN,
+    c6: ICE
+  });
+}
+
 function render(){
   updateButtons();
   if (pinned()){
@@ -635,6 +712,10 @@ function render(){
     else if (followSeenAir) show({ l1:'Following', l2:cfg.follow, l4:'Signal lost', l5l:`Last seen ${hhmm(new Date(followLastSeen))}`, l6: followLow ? 'Probably landed' : '' });
     else show({ l1:'Following', l2:cfg.follow, l4:'Searching...', l5l:'Not in the air yet' });
     return;
+  }
+  if (pickedSat && Date.now() < pickedUntil){
+    const sRec = satRecords.find(s => s.id === pickedSat);
+    if (sRec){ showSatellite(sRec); return; }
   }
   if (pickedHex && Date.now() < pickedUntil){
     const q = planes.find(a => a.hex === pickedHex);
@@ -679,7 +760,7 @@ function start(){
   clearInterval(timer); clearInterval(rotTimer);
   tick();
   timer = setInterval(tick, Math.max(2, cfg.refresh)*1000);
-  rotTimer = setInterval(()=>{ idx++; render(); }, 8000);
+  rotTimer = setInterval(()=>{ if (pickedSat && Date.now() < pickedUntil) render(); else { idx++; render(); } }, 8000);
 }
 
 /* ============ Satellites (CelesTrak + satellite.js) ============ */
@@ -697,13 +778,60 @@ async function ensureSatellites(){
     for (const item of (j.sats || [])){
       try {
         const satrec = window.satellite.twoline2satrec(item.tle1, item.tle2);
-        if (satrec && !satrec.error) list.push({ name: item.name, satrec });
+        const id = String(satrec?.satnum || item.name).trim();
+        if (satrec && !satrec.error) list.push({ id, name: item.name, satrec });
       } catch(e){}
     }
     satRecords = list;
     satLastFetch = Date.now();
   } catch(e){}
   finally { satFetching = false; }
+}
+
+function getSatelliteDetails(rec, nowDate = new Date()){
+  if (!rec || !window.satellite) return null;
+  const satLib = window.satellite;
+  const pv = satLib.propagate(rec.satrec, nowDate);
+  if (!pv || !pv.position) return null;
+  const g = satLib.gstime(nowDate);
+  const observerGd = {
+    longitude: satLib.degreesToRadians(cfg.lon),
+    latitude: satLib.degreesToRadians(cfg.lat),
+    height: 0.05
+  };
+  const ecf = satLib.eciToEcf(pv.position, g);
+  const look = satLib.ecfToLookAngles(observerGd, ecf);
+  const geo = satLib.eciToGeodetic(pv.position, g);
+  const elevDeg = satLib.radiansToDegrees(look.elevation);
+  const azDeg = (satLib.radiansToDegrees(look.azimuth) + 360) % 360;
+  const speedKms = pv.velocity ? Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z) : 0;
+  const inclDeg = satLib.radiansToDegrees(rec.satrec.inclo || 0);
+  const periodMin = rec.satrec.no ? (2 * Math.PI) / rec.satrec.no : 0;
+  const norad = String(rec.satrec.satnum || '').trim();
+
+  // Estimation du temps restant avant perte de signal sous l'horizon (LOS)
+  let remSec = null;
+  if (elevDeg > 0){
+    for (let step = 15; step <= 1800; step += 15){
+      const dt = new Date(nowDate.getTime() + step * 1000);
+      const pv2 = satLib.propagate(rec.satrec, dt);
+      if (!pv2 || !pv2.position) break;
+      const lk2 = satLib.ecfToLookAngles(observerGd, satLib.eciToEcf(pv2.position, satLib.gstime(dt)));
+      if (lk2.elevation <= 0){ remSec = step; break; }
+    }
+  }
+
+  return {
+    norad,
+    altKm: geo.height,
+    rangeKm: look.rangeSat,
+    elevDeg,
+    azDeg,
+    speedKmh: speedKms * 3600,
+    inclDeg,
+    periodMin,
+    remSec
+  };
 }
 
 function getVisibleSatellites(nowDate, cx, cy, R, cLat, cLon){
@@ -782,6 +910,7 @@ function getVisibleSatellites(nowDate, cx, cy, R, cLat, cLon){
     for (const fn of futProjs){ const pt = fn(s.satrec); if (pt) futPts.push([pt.px, pt.py]); }
 
     out.push({
+      id: s.id,
       name: s.name,
       px: cur.px,
       py: cur.py,
@@ -1066,7 +1195,7 @@ addEventListener('keydown', e => { if ((e.key==='f' || e.key==='F') && !/INPUT/.
 
 /* ============ Vue radar ============ */
 const rcv = $('radar'), rctx = rcv.getContext('2d');
-let view = 'led', radarHits = [], pickedHex = '', pickedUntil = 0;
+let view = 'led', radarHits = [], satHits = [], pickedHex = '', pickedSat = '', pickedUntil = 0;
 
 /* ---- Orientation du radar (Nord en haut vs Boussole téléphone) ---- */
 let compassMode = false;
@@ -1424,6 +1553,7 @@ function drawRadar(t){
   const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
 
   // Satellites
+  satHits = [];
   const rotPt = ([px, py]) => {
     const [rx, ry] = rotateRadarVec(px - cx, py - cy);
     return [cx + rx, cy + ry];
@@ -1454,13 +1584,20 @@ function drawRadar(t){
 
     for (const sat of visibleSats){
       const [spx, spy] = rotPt([sat.px, sat.py]);
+      const isSatPicked = pickedSat && Date.now() < pickedUntil && sat.id === pickedSat;
+      if (isSatPicked){
+        c.strokeStyle = 'rgba(56, 189, 248, 0.92)';
+        c.lineWidth = 1.6 * d;
+        c.beginPath(); c.arc(spx, spy, s * 1.9, 0, 6.2832); c.stroke();
+      }
       drawSatelliteIcon(c, spx, spy, s * 0.95, sat.angle - currentHeadingRad, d);
       const lx = spx + s * 1.45;
       const ly = spy - fs * 0.15;
       c.font = mono(fs * 0.92);
-      c.fillStyle = '#bae6fd';
+      c.fillStyle = isSatPicked ? '#ffffff' : '#bae6fd';
       c.shadowColor = '#000'; c.shadowBlur = 4 * d;
       c.fillText(sat.name, lx, ly);
+      const lw = c.measureText(sat.name).width;
       c.font = mono(fs * 0.72);
       c.fillStyle = '#38bdf8';
       const subTxt = cfg.satMode === 'sky'
@@ -1468,6 +1605,7 @@ function drawRadar(t){
         : `${Math.round(sat.altKm)} km · ${sat.distKm.toFixed(1)} km`;
       c.fillText(subTxt, lx, ly + fs * 0.9);
       c.shadowBlur = 0;
+      satHits.push({ id: sat.id, x: spx, y: spy, r: Math.max(30*d, s*2.5), lx, ly: ly - fs*0.6, lw, lh: fs*2.0 });
     }
   }
 
@@ -1664,6 +1802,19 @@ rcv.addEventListener('wheel', e => {
 
 function radarClick(e){
   const d = window.devicePixelRatio || 1, x = e.offsetX*d, y = e.offsetY*d;
+  let bestSat = null, bsd = 1e9;
+  for (const h of satHits){
+    const inLabel = x >= h.lx && x <= h.lx+h.lw && y >= h.ly && y <= h.ly+h.lh;
+    const dd = inLabel ? 0 : Math.hypot(x-h.x, y-h.y);
+    if (dd < h.r && dd < bsd){ bestSat = h; bsd = dd; }
+  }
+  if (bestSat){
+    hideRadar();
+    pickedSat = bestSat.id; pickedHex = ''; pickedUntil = Date.now() + 120000;
+    if (pinned()) followMode = 'normal';
+    render();
+    return;
+  }
   let best = null, bd = 1e9;
   for (const h of radarHits){
     const inLabel = x >= h.lx && x <= h.lx+h.lw && y >= h.ly && y <= h.ly+h.lh;
@@ -1672,7 +1823,7 @@ function radarClick(e){
   }
   hideRadar();
   if (best){
-    pickedHex = best.hex; pickedUntil = Date.now() + 120000;
+    pickedHex = best.hex; pickedSat = ''; pickedUntil = Date.now() + 120000;
     if (pinned()) followMode = 'normal';
     const q = planes.find(a => a.hex === best.hex); if (q) fetchRoute(q);
     render();
