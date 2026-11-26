@@ -109,9 +109,9 @@
     <circle cx="12" cy="12" r="1.2" fill="#0a2012" stroke="none"/>
   </svg>
   <svg id="iconNorth" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
-    <text x="12" y="8.5" text-anchor="middle" font-family="system-ui, sans-serif" font-size="7.5" font-weight="800" fill="currentColor" stroke="none">N</text>
-    <polyline points="8.5 14.5 12 11 15.5 14.5"/>
-    <line x1="12" y1="11" x2="12" y2="21"/>
+    <path d="M9.5 8.5V3.5L14.5 8.5V3.5" stroke-width="2"/>
+    <polyline points="8.5 15 12 11.5 15.5 15"/>
+    <line x1="12" y1="11.5" x2="12" y2="21"/>
   </svg>
 </button>
 <button id="gear" aria-label="Paramètres">⚙</button>
@@ -1123,8 +1123,11 @@ async function toggleCompassMode(){
       }
     }
     compassMode = true;
-    window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
-    window.addEventListener('deviceorientation', onDeviceOrientation, true);
+    if ('ondeviceorientationabsolute' in window){
+      window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
+    } else {
+      window.addEventListener('deviceorientation', onDeviceOrientation, true);
+    }
   } else {
     compassMode = false;
     targetHeadingDeg = 0;
