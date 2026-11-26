@@ -778,7 +778,7 @@ async function ensureSatellites(){
     for (const item of (j.sats || [])){
       try {
         const satrec = window.satellite.twoline2satrec(item.tle1, item.tle2);
-        const id = String(satrec?.satnum || item.name).trim();
+        const id = String((satrec && satrec.satnum) || item.name).trim();
         if (satrec && !satrec.error) list.push({ id, name: item.name, satrec });
       } catch(e){}
     }
