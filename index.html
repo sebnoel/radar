@@ -33,6 +33,11 @@
   #recenter { position:fixed; left:50%; transform:translateX(-50%); bottom:max(14px, var(--sab)); z-index:5; font:13px system-ui,sans-serif; color:#e8ffe0; background:rgba(10,32,18,.88); border:1px solid rgba(90,255,130,.45); border-radius:999px; padding:7px 16px; cursor:pointer; letter-spacing:.02em; box-shadow:0 2px 10px rgba(0,0,0,.6); }
   #recenter:hover, #recenter:focus-visible { background:rgba(18,56,32,.95); border-color:rgba(90,255,130,.85); }
 
+  #orientBtn { position:fixed; right:max(14px, calc(var(--sar) + 12px)); bottom:max(26px, calc(var(--sab) + 20px)); z-index:5; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#cfd6e6; background:rgba(10,32,18,.78); border:1px solid rgba(90,255,130,.32); cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.6); transition:background .15s, border-color .15s, color .15s; padding:0; }
+  #orientBtn[hidden] { display:none; }
+  #orientBtn:hover, #orientBtn:focus-visible { background:rgba(18,56,32,.95); border-color:rgba(90,255,130,.75); color:#e8ffe0; }
+  #orientBtn.on { color:#e8ffe0; background:rgba(18,56,32,.92); border-color:rgba(90,255,130,.85); }
+
   #settings { position:fixed; inset:0; z-index:10; background:rgba(0,0,0,.92); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center; font-family:system-ui,sans-serif; overflow:auto; padding:max(12px, var(--sat)) 12px max(12px, var(--sab)); }
   #settings.open { display:flex; }
   #card { background:#12151c; color:#e8ecf5; padding:20px; border-radius:14px; width:min(92vw,410px); max-height:92dvh; overflow-y:auto; overflow-x:hidden; display:grid; grid-template-columns:minmax(0,1fr); gap:14px; margin:auto; }
@@ -97,6 +102,16 @@
   <button id="bFollow" type="button"></button>
 </div>
 <button id="recenter" type="button" hidden>Recentrer</button>
+<button id="orientBtn" type="button" hidden aria-label="Orientation : Nord en haut" title="Nord en haut">
+  <svg id="iconNorth" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="12 3 17 17 12 14 7 17 12 3" fill="currentColor" stroke="none"/>
+    <line x1="12" y1="18" x2="12" y2="21"/>
+  </svg>
+  <svg id="iconCompass" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden>
+    <circle cx="12" cy="12" r="9"/>
+    <polygon points="15.5 8.5 13.4 13.4 8.5 15.5 10.6 10.6 15.5 8.5" fill="currentColor" stroke="none"/>
+  </svg>
+</button>
 <button id="gear" aria-label="Paramètres">⚙</button>
 
 <div id="settings">
@@ -1062,6 +1077,89 @@ addEventListener('keydown', e => { if ((e.key==='f' || e.key==='F') && !/INPUT/.
 const rcv = $('radar'), rctx = rcv.getContext('2d');
 let view = 'led', radarHits = [], pickedHex = '', pickedUntil = 0;
 
+/* ---- Orientation du radar (Nord en haut vs Boussole téléphone) ---- */
+let compassMode = false;
+let targetHeadingDeg = 0;
+let currentHeadingRad = 0;
+
+function updateOrientUI(){
+  const btn = $('orientBtn');
+  btn.hidden = (view !== 'radar');
+  btn.classList.toggle('on', compassMode);
+  $('iconNorth').hidden = compassMode;
+  $('iconCompass').hidden = !compassMode;
+  btn.title = compassMode ? 'Orientation boussole (actif)' : 'Nord en haut';
+  btn.setAttribute('aria-label', btn.title);
+}
+
+function onDeviceOrientation(e){
+  if (!compassMode) return;
+  let heading = null;
+  if (typeof e.webkitCompassHeading === 'number' && !Number.isNaN(e.webkitCompassHeading)){
+    heading = e.webkitCompassHeading;
+  } else if (typeof e.alpha === 'number' && !Number.isNaN(e.alpha)){
+    const screenAngle = (screen.orientation && typeof screen.orientation.angle === 'number')
+      ? screen.orientation.angle
+      : (typeof window.orientation === 'number' ? window.orientation : 0);
+    heading = (360 - e.alpha + screenAngle) % 360;
+  }
+  if (heading !== null) targetHeadingDeg = (heading + 360) % 360;
+}
+
+async function toggleCompassMode(){
+  if (!compassMode){
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      try {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm !== 'granted'){
+          status('Autorisation boussole refusée');
+          return;
+        }
+      } catch(e){
+        status('Boussole indisponible : ' + e.message);
+        return;
+      }
+    }
+    compassMode = true;
+    window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
+    window.addEventListener('deviceorientation', onDeviceOrientation, true);
+  } else {
+    compassMode = false;
+    targetHeadingDeg = 0;
+    window.removeEventListener('deviceorientationabsolute', onDeviceOrientation, true);
+    window.removeEventListener('deviceorientation', onDeviceOrientation, true);
+  }
+  updateOrientUI();
+}
+
+function stepHeadingAnim(){
+  const targetRad = (compassMode ? targetHeadingDeg : 0) * Math.PI / 180;
+  let diff = ((targetRad - currentHeadingRad + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  if (Math.abs(diff) < 0.0005){
+    currentHeadingRad = targetRad;
+  } else {
+    currentHeadingRad += diff * 0.16;
+  }
+}
+
+function rotateRadarVec(dx, dy, rad = currentHeadingRad){
+  if (!rad) return [dx, dy];
+  const c = Math.cos(rad), s = Math.sin(rad);
+  // Rotation de -rad autour du centre radar (le cap du téléphone passe en haut)
+  return [dx * c + dy * s, -dx * s + dy * c];
+}
+
+function unrotateRadarVec(dx, dy, rad = currentHeadingRad){
+  if (!rad) return [dx, dy];
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return [dx * c - dy * s, dx * s + dy * c];
+}
+
+$('orientBtn').onclick = e => {
+  e.stopPropagation();
+  toggleCompassMode();
+};
+
 function sizeRadar(){
   const d = window.devicePixelRatio || 1;
   const rect = rcv.getBoundingClientRect();
@@ -1077,6 +1175,7 @@ function showRadar(){
   rcv.style.display = 'block';
   updateButtons();
   updateRecenterBtn();
+  updateOrientUI();
   sizeRadar();
   ensureSatellites();
   requestAnimationFrame(radarLoop);
@@ -1087,6 +1186,7 @@ function hideRadar(){
   rcv.style.display = 'none';
   resetPan();
   updateButtons();
+  updateOrientUI();
   if (wasPanned) tick();
 }
 
@@ -1110,7 +1210,7 @@ function stepPanAnim(){
   }
 }
 
-function radarLoop(t){ if (view !== 'radar') return; stepPanAnim(); sizeRadar(); drawRadar(t); requestAnimationFrame(radarLoop); }
+function radarLoop(t){ if (view !== 'radar') return; stepPanAnim(); stepHeadingAnim(); sizeRadar(); drawRadar(t); requestAnimationFrame(radarLoop); }
 
 const PLANE = [[0,-1],[.12,-.55],[.95,.05],[.95,.22],[.12,0],[.1,.65],[.4,.85],[.4,.98],[0,.88],[-.4,.98],[-.4,.85],[-.1,.65],[-.12,0],[-.95,.22],[-.95,.05],[-.12,-.55]];
 const GL = '90,255,130';
@@ -1178,12 +1278,14 @@ function drawMap(c, cx, cy, R){
   const lonOf = x => x/n*360-180, latOf = y => Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI;
   const sx = lon => cx + (lon-lon0)*kmx/rad*R, sy = lat => cy - (lat-lat0)*kmy/rad*R;
   c.save(); c.beginPath(); c.arc(cx,cy,R,0,6.2832); c.clip(); c.globalAlpha = 0.55;
+  if (currentHeadingRad){ c.translate(cx, cy); c.rotate(-currentHeadingRad); c.translate(-cx, -cy); }
   for (let ty=y0; ty<=y1; ty++){ if (ty < 0 || ty >= n) continue;
     for (let tx=x0; tx<=x1; tx++){
       const t = getTile(z, ((tx%n)+n)%n, ty); if (!t.ok) continue;
       const l = sx(lonOf(tx)), r = sx(lonOf(tx+1)), tp = sy(latOf(ty)), b = sy(latOf(ty+1));
       c.drawImage(t.img, l, tp, r-l+0.5, b-tp+0.5);
     } }
+  if (currentHeadingRad){ c.setTransform(1,0,0,1,0,0); }
   c.globalAlpha = 1; c.fillStyle = 'rgba(8,60,25,.28)'; c.fillRect(cx-R, cy-R, 2*R, 2*R);
   c.restore();
 }
@@ -1209,8 +1311,9 @@ function drawRadar(t){
   const kmx = 111.32*Math.cos(vLat*Math.PI/180), kmy = 110.57;
 
   // Position écran de la maison (ancrée à cfg.lat / cfg.lon lors d'un déplacement)
-  const homeX = cx + ((cfg.lon - vLon)*kmx / cfg.radius) * R;
-  const homeY = cy - ((cfg.lat - vLat)*kmy / cfg.radius) * R;
+  const [hdx, hdy] = rotateRadarVec(((cfg.lon - vLon)*kmx / cfg.radius) * R, -((cfg.lat - vLat)*kmy / cfg.radius) * R);
+  const homeX = cx + hdx;
+  const homeY = cy + hdy;
 
   const g = c.createRadialGradient(cx,cy,0,cx,cy,R); g.addColorStop(0,'#0d4a20'); g.addColorStop(1,'#04200d');
   c.fillStyle = g; c.beginPath(); c.arc(cx,cy,R,0,6.2832); c.fill();
@@ -1226,7 +1329,12 @@ function drawRadar(t){
   // cercles de distance + axes
   c.strokeStyle = `rgba(${GL},.6)`; c.lineWidth = 1.5*d;
   for (let k=1;k<=4;k++){ c.beginPath(); c.arc(cx,cy,R*k/4,0,6.2832); c.stroke(); }
-  c.beginPath(); c.moveTo(cx-R,cy); c.lineTo(cx+R,cy); c.moveTo(cx,cy-R); c.lineTo(cx,cy+R); c.stroke();
+  const [axX, axY] = rotateRadarVec(R, 0);
+  const [ayX, ayY] = rotateRadarVec(0, R);
+  c.beginPath();
+  c.moveTo(cx - axX, cy - axY); c.lineTo(cx + axX, cy + axY);
+  c.moveTo(cx - ayX, cy - ayY); c.lineTo(cx + ayX, cy + ayY);
+  c.stroke();
 
   // Zone d'alerte zénith (ancrée sur la position maison)
   if (cfg.notifEnabled){
@@ -1269,7 +1377,7 @@ function drawRadar(t){
   }
 
   const lf = Math.max(10*d, R*0.03); c.font = mono(lf); c.fillStyle = `rgba(${GL},.85)`; c.textBaseline = 'middle';
-  const sa = cfg.scaleDir * Math.PI/180, sdx = Math.round(Math.sin(sa)*1000)/1000, sdy = -Math.round(Math.cos(sa)*1000)/1000;
+  const sa = cfg.scaleDir * Math.PI/180 - currentHeadingRad, sdx = Math.round(Math.sin(sa)*1000)/1000, sdy = -Math.round(Math.cos(sa)*1000)/1000;
   const minX = (safe.left + 4) * d, maxX = W - (safe.right + 4) * d;
   const minY = (safe.top + 4) * d, maxY = H - (safe.bottom + 4) * d;
   let prevBox = null;
@@ -1293,7 +1401,9 @@ function drawRadar(t){
     c.fillText(label, tx, ty);
     prevBox = { x0, x1, y0, y1 };
   }
-  c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText('N', cx, cy - R - 3*d); c.textAlign = 'left'; c.textBaseline = 'middle';
+  const [nx, ny] = rotateRadarVec(0, -(R + 10*d));
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('N', cx + nx, cy + ny);
+  c.textAlign = 'left'; c.textBaseline = 'middle';
 
   // Repère maison (si visible dans le disque) + croix centrale si déplacé
   if (Math.hypot(homeX - cx, homeY - cy) <= R){
@@ -1312,6 +1422,10 @@ function drawRadar(t){
   const s = Math.max(8*d, R*0.035), fs = Math.max(11*d, Math.min(18*d, R*0.04));
 
   // Satellites
+  const rotPt = ([px, py]) => {
+    const [rx, ry] = rotateRadarVec(px - cx, py - cy);
+    return [cx + rx, cy + ry];
+  };
   const visibleSats = getVisibleSatellites(new Date(now), cx, cy, R, vLat, vLon);
   if (visibleSats.length){
     c.save();
@@ -1321,7 +1435,7 @@ function drawRadar(t){
         c.strokeStyle = 'rgba(56, 189, 248, 0.65)';
         c.lineWidth = 1.6 * d;
         c.beginPath();
-        sat.pastPts.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py));
+        sat.pastPts.map(rotPt).forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py));
         c.stroke();
       }
       if (sat.futPts.length >= 2){
@@ -1329,7 +1443,7 @@ function drawRadar(t){
         c.strokeStyle = 'rgba(56, 189, 248, 0.35)';
         c.lineWidth = 1.2 * d;
         c.beginPath();
-        sat.futPts.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py));
+        sat.futPts.map(rotPt).forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py));
         c.stroke();
         c.setLineDash([]);
       }
@@ -1337,9 +1451,10 @@ function drawRadar(t){
     c.restore();
 
     for (const sat of visibleSats){
-      drawSatelliteIcon(c, sat.px, sat.py, s * 0.95, sat.angle, d);
-      const lx = sat.px + s * 1.45;
-      const ly = sat.py - fs * 0.15;
+      const [spx, spy] = rotPt([sat.px, sat.py]);
+      drawSatelliteIcon(c, spx, spy, s * 0.95, sat.angle - currentHeadingRad, d);
+      const lx = spx + s * 1.45;
+      const ly = spy - fs * 0.15;
       c.font = mono(fs * 0.92);
       c.fillStyle = '#bae6fd';
       c.shadowColor = '#000'; c.shadowBlur = 4 * d;
@@ -1364,7 +1479,8 @@ function drawRadar(t){
     // Position relative au centre de la vue radar
     const vx = (p.lon - vLon)*kmx + dxStep;
     const vy = (p.lat - vLat)*kmy + dyStep;
-    const px = cx + vx/cfg.radius*R, py = cy - vy/cfg.radius*R;
+    const [rpx, rpy] = rotateRadarVec(vx/cfg.radius*R, -vy/cfg.radius*R);
+    const px = cx + rpx, py = cy + rpy;
     if (Math.hypot(px-cx,py-cy) > R + s) continue;
 
     // Distance réelle par rapport à la maison (pour l'angle zénithal et l'info distance)
@@ -1382,7 +1498,7 @@ function drawRadar(t){
       c.beginPath(); c.arc(px, py, s*1.85, 0, 6.2832); c.stroke();
     }
 
-    c.save(); c.translate(px,py); c.rotate(tr);
+    c.save(); c.translate(px,py); c.rotate(tr - currentHeadingRad);
     c.fillStyle = inAlert ? '#ffbe3c' : '#d6ff3a';
     c.shadowColor = inAlert ? '#ffbe3c' : '#d6ff3a';
     c.shadowBlur = 10*d;
@@ -1453,8 +1569,9 @@ function panByPixels(dxPx, dyPx){
   const R = Math.max(40*d, Math.min((rcv.width - 2*sidePad)/2, (rcv.height - topPad - botPad)/2));
   const kmPerCssPx = (cfg.radius / R) * d;
   const coslat = Math.max(0.1, Math.cos(viewLat() * Math.PI / 180));
-  panLon -= (dxPx * kmPerCssPx) / (111.32 * coslat);
-  panLat += (dyPx * kmPerCssPx) / 110.57;
+  const [udx, udy] = unrotateRadarVec(dxPx, dyPx);
+  panLon -= (udx * kmPerCssPx) / (111.32 * coslat);
+  panLat += (udy * kmPerCssPx) / 110.57;
   updateRecenterBtn();
 }
 
