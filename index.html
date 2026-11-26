@@ -102,14 +102,16 @@
   <button id="bFollow" type="button"></button>
 </div>
 <button id="recenter" type="button" hidden>Recentrer</button>
-<button id="orientBtn" type="button" hidden aria-label="Orientation : Nord en haut" title="Nord en haut">
-  <svg id="iconNorth" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <polygon points="12 3 17 17 12 14 7 17 12 3" fill="currentColor" stroke="none"/>
-    <line x1="12" y1="18" x2="12" y2="21"/>
+<button id="orientBtn" type="button" hidden aria-label="Activer l'orientation boussole" title="Activer l'orientation boussole">
+  <svg id="iconCompass" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9.5"/>
+    <polygon points="16.2 7.8 13.8 13.8 7.8 16.2 10.2 10.2 16.2 7.8" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="12" r="1.2" fill="#0a2012" stroke="none"/>
   </svg>
-  <svg id="iconCompass" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden>
-    <circle cx="12" cy="12" r="9"/>
-    <polygon points="15.5 8.5 13.4 13.4 8.5 15.5 10.6 10.6 15.5 8.5" fill="currentColor" stroke="none"/>
+  <svg id="iconNorth" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+    <text x="12" y="8.5" text-anchor="middle" font-family="system-ui, sans-serif" font-size="7.5" font-weight="800" fill="currentColor" stroke="none">N</text>
+    <polyline points="8.5 14.5 12 11 15.5 14.5"/>
+    <line x1="12" y1="11" x2="12" y2="21"/>
   </svg>
 </button>
 <button id="gear" aria-label="Paramètres">⚙</button>
@@ -1086,9 +1088,9 @@ function updateOrientUI(){
   const btn = $('orientBtn');
   btn.hidden = (view !== 'radar');
   btn.classList.toggle('on', compassMode);
-  $('iconNorth').hidden = compassMode;
-  $('iconCompass').hidden = !compassMode;
-  btn.title = compassMode ? 'Orientation boussole (actif)' : 'Nord en haut';
+  $('iconCompass').hidden = compassMode;
+  $('iconNorth').hidden = !compassMode;
+  btn.title = compassMode ? 'Revenir au Nord en haut' : 'Activer l\'orientation boussole';
   btn.setAttribute('aria-label', btn.title);
 }
 
