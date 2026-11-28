@@ -341,6 +341,62 @@ async function getFlightRoute(cs, lat, lon, memo) {
   return routeTxt;
 }
 
+/* ============ Apple Push Notification Service (APNs) via WebCrypto ============ */
+let cachedApnsJwt = { token: '', exp: 0 };
+
+function b64url(buf) {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function getApnsJwt(env) {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedApnsJwt.token && now < cachedApnsJwt.exp - 300) return cachedApnsJwt.token;
+
+  const pem = String(env.APNS_PRIVATE_KEY || '').replace(/\\n/g, '\n').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const rawKey = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+  const cryptoKey = await crypto.subtle.importKey('pkcs8', rawKey, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+
+  const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'ES256', kid: env.APNS_KEY_ID })));
+  const claims = b64url(new TextEncoder().encode(JSON.stringify({ iss: env.APNS_TEAM_ID, iat: now })));
+  const unsigned = `${header}.${claims}`;
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, cryptoKey, new TextEncoder().encode(unsigned));
+
+  const jwt = `${unsigned}.${b64url(sig)}`;
+  cachedApnsJwt = { token: jwt, exp: now + 3000 };
+  return jwt;
+}
+
+async function sendApns(env, deviceToken, title, body, dataPayload = {}, imageUrl = '') {
+  if (!env.APNS_PRIVATE_KEY || !env.APNS_KEY_ID || !env.APNS_TEAM_ID) {
+    return { ok: false, status: 500, error: 'Secrets APNs manquants dans Cloudflare' };
+  }
+  const jwt = await getApnsJwt(env);
+  const host = env.APNS_SANDBOX === '1' ? 'https://api.sandbox.push.apple.com' : 'https://api.push.apple.com';
+  const payload = {
+    aps: {
+      alert: { title, body },
+      sound: 'default',
+      'mutable-content': 1
+    },
+    ...dataPayload,
+    ...(imageUrl ? { imageUrl } : {})
+  };
+  return fetch(`${host}/3/device/${encodeURIComponent(deviceToken)}`, {
+    method: 'POST',
+    headers: {
+      authorization: `bearer ${jwt}`,
+      'apns-topic': env.APNS_BUNDLE_ID || 'io.github.sebnoel.radar',
+      'apns-push-type': 'alert',
+      'apns-priority': '10',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
 async function sendNtfy(topic, title, body, targetUrl, radarImgUrl) {
   const baseHeaders = { 'Title': title, 'Tags': 'airplane', 'Priority': 'default' };
   if (targetUrl && /^https?:\/\//.test(targetUrl)) {
@@ -542,6 +598,7 @@ export default {
         }
 
         const prevSent = registry[topic]?.sent || {};
+        const apnsToken = String(data.apnsToken || registry[topic]?.apnsToken || '').replace(/[^a-fA-F0-9]/g, '');
         registry[topic] = {
           topic,
           enabled: true,
@@ -552,6 +609,7 @@ export default {
           start: String(data.start || '09:00'),
           end: String(data.end || '00:00'),
           tz: String(data.tz || 'Europe/Paris'),
+          apnsToken,
           appUrl: String(data.appUrl || '').slice(0, 250),
           workerUrl: u.origin,
           updatedAt: Date.now(),
@@ -596,8 +654,14 @@ export default {
         const testImg = `${u.origin}/radar.png?dx=${(zr * 0.45).toFixed(2)}&dy=${(zr * 0.55).toFixed(2)}&tr=45&r=${Math.max(10, zr * 2.2).toFixed(1)}&zr=${zr.toFixed(2)}`;
         const targetUrl = data.appUrl ? `${data.appUrl}?view=radar&sync=${encodeURIComponent(topic)}` : '';
 
-        const r = await sendNtfy(topic, 'Test Radar Zenith', `Alertes actives (cone de ${angle}°). Le clic ouvrira le radar.`, targetUrl, testImg);
-        if (!r.ok) throw new Error('Erreur ntfy ' + r.status);
+        const apnsToken = String(data.apnsToken || '').replace(/[^a-fA-F0-9]/g, '');
+        const r = apnsToken
+          ? await sendApns(env, apnsToken, 'Test Radar Zénith', `Alertes natives actives (cône de ${angle}°).`, { view: 'radar' }, testImg)
+          : await sendNtfy(topic, 'Test Radar Zenith', `Alertes actives (cone de ${angle}°). Le clic ouvrira le radar.`, targetUrl, testImg);
+        if (!r.ok) {
+          const errTxt = typeof r.text === 'function' ? await r.text().catch(() => '') : (r.error || '');
+          throw new Error(`Erreur push ${r.status} ${errTxt}`);
+        }
         return new Response(JSON.stringify({ ok: true }), { headers: noCacheJson });
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: noCacheJson });
@@ -738,15 +802,24 @@ export default {
           const line1 = `${airline ? airline + ' ' : ''}${cs} • Alt ${altTxt}${routeTxt ? ' • ' + routeTxt : ''}`;
           const line2 = `Cap ${Math.round(p.track || 0)}° • Vitesse ${Math.round(p.gs || 0)} kt`;
 
-          const res = await sendNtfy(
-            sub.topic,
-            `Avion au zenith (${angle.toFixed(1)}°)`,
-            `${line1}\n${line2}`,
-            targetUrl,
-            radarImgUrl
-          );
+          const res = sub.apnsToken
+            ? await sendApns(
+                env,
+                sub.apnsToken,
+                `Avion au zénith (${angle.toFixed(1)}°)`,
+                `${line1}\n${line2}`,
+                { view: 'radar', hex: p.hex },
+                radarImgUrl
+              )
+            : await sendNtfy(
+                sub.topic,
+                `Avion au zenith (${angle.toFixed(1)}°)`,
+                `${line1}\n${line2}`,
+                targetUrl,
+                radarImgUrl
+              );
 
-          cronLog.alerts.push({ topic: sub.topic, flight: cs, zenith: +angle.toFixed(1), ntfy_http: res.status });
+          cronLog.alerts.push({ topic: sub.topic, flight: cs, zenith: +angle.toFixed(1), channel: sub.apnsToken ? 'apns' : 'ntfy', http: res.status });
 
           if (res.ok) {
             sub.sent[p.hex] = now;

@@ -14,13 +14,16 @@
     --sal: env(safe-area-inset-left, 0px);
     --sar: env(safe-area-inset-right, 0px);
   }
-  * { box-sizing:border-box; margin:0; }
-  html,body { width:100%; height:100%; height:100dvh; background:#000; overflow:hidden; touch-action:manipulation; }
+  * { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; height:100dvh; background:#000; overflow:hidden; overscroll-behavior:none; touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  input, select, textarea { -webkit-user-select:auto; user-select:auto; }
   body { display:flex; align-items:center; justify-content:center; }
   #led { display:block; background:#05060a; image-rendering:pixelated; }
 
   body.idle, body.idle * { cursor:none !important; }
-  #gear { position:fixed; top:max(46px, calc(var(--sat) + 38px)); right:max(12px, calc(var(--sar) + 8px)); z-index:5; background:none; border:0; color:#fff; opacity:.35; font-size:24px; padding:8px; line-height:1; cursor:pointer; }
+  #gear { position:fixed; top:max(14px, calc(var(--sat) + 8px)); right:max(12px, calc(var(--sar) + 8px)); z-index:5; background:none; border:0; color:#fff; opacity:.35; font-size:24px; padding:8px; line-height:1; cursor:pointer; }
+  html.web-browser #gear { top:max(46px, calc(var(--sat) + 38px)); }
+  html.native-ios .web-only { display:none !important; }
   @media (orientation: landscape) { #gear { top:max(10px, calc(var(--sat) + 6px)); } }
   #gear:hover,#gear:focus { opacity:.85; }
 
@@ -166,7 +169,7 @@
         <button id="testNotif" type="button">Tester la notification</button>
       </div>
 
-      <div class="sync-box">
+      <div class="sync-box web-only">
         <label>Code de profil (synchro PC ↔ Mobile &amp; ntfy)
           <div class="input-group">
             <input id="ntfyTopicInput" type="text" placeholder="radar-xxxxxxxx" autocomplete="off" spellcheck="false">
@@ -180,7 +183,7 @@
         </div>
       </div>
 
-      <details class="pc-help">
+      <details class="pc-help web-only">
         <summary>Synchroniser PC ↔ iPhone et installer ntfy</summary>
         <div class="help-body">
           <p><b>Synchroniser vos appareils :</b> cliquez sur <i>Enregistrer</i>, puis utilisez <b>Lien de synchro</b> pour ouvrir ce profil sur votre téléphone. Toute modification enregistrée sur l’un se répercute automatiquement sur l’autre.</p>
@@ -256,6 +259,37 @@
 <script>
 const $ = id => document.getElementById(id);
 const RELAY_URL = (new URLSearchParams(location.search).get('proxy') || 'https://radar-relay.sebnoel.workers.dev').replace(/\/$/, '');
+const IS_NATIVE_IOS = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+document.documentElement.classList.add(IS_NATIVE_IOS ? 'native-ios' : 'web-browser');
+let nativeApnsToken = localStorage.getItem('fd-apns-token') || '';
+
+async function registerNativePush(){
+  const Push = window.Capacitor?.Plugins?.PushNotifications;
+  if (!IS_NATIVE_IOS || !Push) return nativeApnsToken;
+  let perm = await Push.checkPermissions();
+  if (perm.receive === 'prompt') perm = await Push.requestPermissions();
+  if (perm.receive !== 'granted') throw new Error('Autorisation notifications refusée dans Réglages iOS');
+
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => resolve(nativeApnsToken), 5000);
+    Push.addListener('registration', tok => {
+      clearTimeout(t);
+      nativeApnsToken = tok.value;
+      try { localStorage.setItem('fd-apns-token', nativeApnsToken); } catch(e){}
+      resolve(nativeApnsToken);
+    });
+    Push.addListener('registrationError', err => { clearTimeout(t); reject(new Error(err?.error || 'Erreur APNs')); });
+    Push.register();
+  });
+}
+
+if (IS_NATIVE_IOS && window.Capacitor?.Plugins?.PushNotifications){
+  window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', action => {
+    const d = action?.notification?.data || {};
+    if (d.hex){ pickedHex = d.hex; pickedUntil = Date.now() + 120000; }
+    if (d.view === 'radar' || d.hex) showRadar();
+  });
+}
 
 function getSafeInsets(){
   const s = getComputedStyle(document.documentElement);
@@ -1000,6 +1034,7 @@ function buildSubPayload(overridePos){
     angle: Math.min(85, Math.max(1, +$('notifAngle').value || 15)),
     start: $('notifStart').value || '09:00',
     end: $('notifEnd').value || '00:00',
+    apnsToken: IS_NATIVE_IOS ? nativeApnsToken : '',
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris',
     appUrl: location.href.split('?')[0]
   };
@@ -1067,6 +1102,7 @@ $('copySyncLink').onclick = async () => {
 $('testNotif').onclick = async () => {
   try {
     status('Envoi de la notification test…');
+    if (IS_NATIVE_IOS) await registerNativePush();
     const payload = buildSubPayload();
     const r = await fetch(`${RELAY_URL}/notify/test`, {
       method: 'POST',
@@ -1130,6 +1166,7 @@ $('save').onclick = async () => {
   if (cfg.satMode !== 'off') ensureSatellites();
 
   try {
+    if (IS_NATIVE_IOS && cfg.notifEnabled) await registerNativePush();
     await Promise.all([
       pushFullConfig(),
       syncNotif(buildSubPayload(pos))
@@ -1658,7 +1695,8 @@ function drawRadar(t){
 
   c.shadowBlur = 0;
   const hudX = Math.max(14, safe.left + 12) * d;
-  const hudY = (isLandscape ? Math.max(10, safe.top + 8) : Math.max(48, safe.top + 42)) * d;
+  const topInsetExtra = IS_NATIVE_IOS ? 10 : 42;
+  const hudY = (isLandscape ? Math.max(10, safe.top + 8) : Math.max(16, safe.top + topInsetExtra)) * d;
   const hudFont = Math.max(11*d, R*0.028);
   c.font = mono(hudFont); c.fillStyle = `rgba(${GL},.85)`; c.textAlign = 'left'; c.textBaseline = 'top';
   const hud = cfg.notifEnabled ? `${planes.length} aircraft · ${cfg.radius} km · zénith ≤ ${cfg.notifAngle}°` : `${planes.length} aircraft · ${cfg.radius} km`;
@@ -1724,7 +1762,13 @@ function touchDist(touches){
 
 // Mobile : pincement (zoom) + glissement simultané à 2 doigts (déplacement)
 rcv.addEventListener('touchstart', e => {
-  if (e.touches.length === 2){
+  if (e.touches.length === 1){
+    isDragging = true;
+    dragMoved = false;
+    dragX = e.touches[0].clientX;
+    dragY = e.touches[0].clientY;
+  } else if (e.touches.length === 2){
+    isDragging = false;
     e.preventDefault();
     clearTimeout(radarClickT);
     isPinching = true;
@@ -1736,7 +1780,16 @@ rcv.addEventListener('touchstart', e => {
 }, { passive: false });
 
 rcv.addEventListener('touchmove', e => {
-  if (isPinching && e.touches.length === 2){
+  if (isDragging && e.touches.length === 1 && !isPinching){
+    const dx = e.touches[0].clientX - dragX, dy = e.touches[0].clientY - dragY;
+    if (!dragMoved && Math.hypot(dx, dy) < 8) return;
+    e.preventDefault();
+    dragMoved = true;
+    clearTimeout(radarClickT);
+    panByPixels(dx, dy);
+    dragX = e.touches[0].clientX;
+    dragY = e.touches[0].clientY;
+  } else if (isPinching && e.touches.length === 2){
     e.preventDefault();
     const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
     const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -1759,6 +1812,13 @@ rcv.addEventListener('touchend', e => {
     pinchCooldown = Date.now() + 400;
     saveCfg();
     tick();
+  } else if (isDragging && e.touches.length === 0){
+    isDragging = false;
+    if (dragMoved){
+      dragMoved = false;
+      pinchCooldown = Date.now() + 250;
+      scheduleRadarFetch(250);
+    }
   }
 });
 
