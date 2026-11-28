@@ -1,5 +1,10 @@
 {
   "appId": "io.github.sebnoel.radar",
-  "appName": "Radar",
-  "webDir": "www"
+  "appName": "Flight Display",
+  "webDir": "www",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
 }
